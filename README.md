@@ -1,53 +1,77 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# RPE - Rocket Performance & Engagement (Backend)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=prisma&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Backend da plataforma RPE, uma solução digital completa para centralizar e automatizar a avaliação de desempenho dos colaboradores da Rocket Corp.
 
-## Project setup
+## 🎯 Sobre o Projeto
 
-- Se Você não tiver o pnpm instalado
+ A empresa Rocket Corp enfrenta desafios com seu processo de avaliação de desempenho, que é manual, fragmentado e suscetível a vieses.  Gestores relatam dificuldades em consolidar feedbacks e comparar desempenhos de forma estruturada.  A ausência de uma plataforma integrada dificulta a análise de dados e a tomada de decisões estratégicas sobre promoções e treinamentos.
 
+ O **RPE (Rocket Performance and Engagement)** foi criado para resolver esses problemas, oferecendo uma abordagem estruturada e baseada em dados que garante avaliações mais justas, eficientes e alinhadas com os objetivos da organização.
+
+## ✨ Funcionalidades (MVP 1 Concluído)
+
+ Este repositório contém o backend com as funcionalidades essenciais do **MVP 1 - Digitalização Básica do Processo**:
+
+*  **Gestão de Usuários (Colaboradores):** CRUD completo para colaboradores, gestores e outros perfis.
+* **Segurança:** Hashing de senhas com `bcrypt` para armazenamento seguro.
+*  **Gestão de Cargos/Trilhas (Roles):** CRUD para gerenciar os diferentes papéis na empresa, permitindo a configuração de critérios por cargo/trilha/unidade.
+*  **Gestão de Critérios de Avaliação:** CRUD para os critérios de `Comportamento`, `Execução` e `Gestão`.
+* **Gestão de Ciclos de Avaliação:** Permite ao RH abrir e fechar os períodos de avaliação.
+*  **Submissão de Avaliações:** Endpoints para que os colaboradores possam submeter suas autoavaliações [cite: 22] , avaliações de pares/líderes   e indicações de referência.
+* **Validação de Dados:** Uso de DTOs com `class-validator` para garantir a integridade dos dados de entrada.
+* **Documentação de API:** Geração automática de uma documentação interativa com Swagger (OpenAPI).
+
+## 🛠️ Tecnologias Utilizadas
+
+* **[NestJS](https://nestjs.com/):** Framework Node.js progressivo para construir aplicações eficientes e escaláveis.
+* **[Prisma](https://www.prisma.io/):** ORM de última geração para Node.js e TypeScript.
+* **[TypeScript](https://www.typescriptlang.org/):** Superset do JavaScript que adiciona tipagem estática.
+* **[SQLite](https://www.sqlite.org/index.html):** Banco de dados relacional para o ambiente de desenvolvimento.
+* **[Swagger (OpenAPI)](https://swagger.io/):** Para documentação e teste de API.
+* **[Bcrypt](https://www.npmjs.com/package/bcrypt):** Para hashing de senhas.
+* **[pnpm](https://pnpm.io/):** Gerenciador de pacotes rápido e eficiente.
+
+## 🚀 Começando
+
+Siga estas instruções para obter uma cópia do projeto e executá-la em sua máquina local para desenvolvimento e testes.
+
+### Pré-requisitos
+
+* [Node.js](https://nodejs.org/en/) (versão 18 ou superior)
+* [pnpm](https://pnpm.io/installation)
+
+### Instalação
+
+1.  **Clone o repositório:**
+    ```bash
+    git clone https://github.com/belli5/Arraiaware-backend.git
+    cd Arraiaware-backend
+    ```
+
+2.  **Instale as dependências:**
+    ```bash
+    pnpm install
+    ```
+
+3.  **Execute as migrações do banco de dados:**
+    Este comando irá criar o banco de dados SQLite e aplicar todas as tabelas necessárias com base no `schema.prisma`.
+    ```bash
+    pnpm prisma migrate dev
+    ```
+
+## ධ Executando a Aplicação
+
+Para iniciar o servidor em modo de desenvolvimento com hot-reload:
 ```bash
-$ npm install -g pnpm
+pnpm start:dev
 ```
-- Depois rode para instalar as dependências necessárias
-  
+
+A aplicação estará disponível em:
 ```bash
-$ pnpm install
+http://localhost:3000
 ```
-
-- O arquivo ".env" deve esta assim:
-
-DATABASE_URL="file:./dev.db"
-
-- Gerar o banco e aplicar a migração inicial
-  
-```bash
-$ npx prisma migrate dev --name init
-```
-
-- Para rodar o projeto
-
-```bash
-$ pnpm start:dev
-```
-
