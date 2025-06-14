@@ -1,11 +1,14 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
-     const app = await NestFactory.create(AppModule);
-app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  const app = await NestFactory.create(AppModule);
+
+  const port = process.env.PORT || 3000;
+
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   const config = new DocumentBuilder()
     .setTitle('RPE - Rocket Performance & Engagement API')
@@ -22,6 +25,11 @@ app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: t
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 
-  await app.listen(3000);
+  await app.listen(port);
+
+  const logger = new Logger('Bootstrap');
+  const appUrl = await app.getUrl();
+  logger.log(`🚀 Aplicação rodando em: ${appUrl}`);
+  logger.log(`📚 Documentação Swagger disponível em: ${appUrl}/api-docs`);
 }
 bootstrap();
