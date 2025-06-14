@@ -1,4 +1,3 @@
-// 1. Importe o ApiHideProperty
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
