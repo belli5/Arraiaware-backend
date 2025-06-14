@@ -1,33 +1,44 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import * as bcrypt from 'bcrypt'; 
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { password, ...userData } = createUserDto;
+    const { email, password, name, userType, roleId, leaderId } = createUserDto;
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException(`O e-mail '${email}' já está em uso.`);
+    }
 
     const saltOrRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltOrRounds);
+    const hashedPassword = await bcrypt.hash(password, saltOrRounds);
 
-    try {
-      const user = await this.prisma.user.create({
-        data: {
-          ...userData,
-          passwordHash, 
-        },
-      });
+    const user = await this.prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash: hashedPassword,
+        userType,
+        roleId,
+        leaderId,
+      },
+    });
 
-      const { passwordHash: _, ...result } = user;
-      return result;
-
-    } catch (error) {
-      throw error;
-    }
+    const { passwordHash: _, ...result } = user;
+    return result;
   }
 
   async findAll() {
@@ -37,8 +48,8 @@ export class UsersService {
         leader: true,
       },
     });
-    return users.map(user => {
-      const { passwordHash, ...result } = user;
+    return users.map((user) => {
+      const { passwordHash: _, ...result } = user;
       return result;
     });
   }
@@ -53,24 +64,36 @@ export class UsersService {
       throw new NotFoundException(`Usuário com ID ${id} não encontrado`);
     }
 
-    const { passwordHash, ...result } = user;
+    const { passwordHash: _, ...result } = user;
     return result;
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    if (updateUserDto.password) {
-      delete updateUserDto.password;
-    }
-    
     await this.findOne(id);
-    return this.prisma.user.update({
+
+    const dataToUpdate: any = { ...updateUserDto };
+    delete dataToUpdate.password;
+
+    if (updateUserDto.password) {
+      const saltOrRounds = 10;
+      dataToUpdate.passwordHash = await bcrypt.hash(
+        updateUserDto.password,
+        saltOrRounds,
+      );
+    }
+
+    const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: updateUserDto,
+      data: dataToUpdate,
     });
+
+    const { passwordHash: _, ...result } = updatedUser;
+    return result;
   }
 
   async remove(id: string) {
     await this.findOne(id);
-    return this.prisma.user.delete({ where: { id } });
+    await this.prisma.user.delete({ where: { id } });
+    return { message: `Usuário com ID ${id} removido com sucesso.` };
   }
 }
