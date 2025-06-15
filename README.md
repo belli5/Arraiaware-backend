@@ -50,6 +50,8 @@ Siga estas instruções para obter uma cópia do projeto e executá-la em sua m�
 1.  **Clone o repositório:**
     ```bash
     git clone https://github.com/belli5/Arraiaware-backend.git
+    ```
+    ```bash
     cd Arraiaware-backend
     ```
 
@@ -73,5 +75,5 @@ pnpm start:dev
 
 A aplicação estará disponível em:
 ```bash
-http://localhost:3000
+http://localhost:3000/api-docs
 ```
