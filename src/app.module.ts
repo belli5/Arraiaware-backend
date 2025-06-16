@@ -5,9 +5,10 @@ import { CriteriaModule } from './criteria/criteria.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { CyclesModule } from './cycles/cycles.module';
 
 @Module({
-  imports: [PrismaModule, UsersModule, RolesModule, CriteriaModule],
+  imports: [PrismaModule, UsersModule, RolesModule, CriteriaModule, CyclesModule],
   controllers: [AppController],
   providers: [AppService],
 })
