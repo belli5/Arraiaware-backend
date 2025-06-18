@@ -7,6 +7,8 @@
 
 Backend da plataforma RPE, uma solução digital completa para centralizar e automatizar a avaliação de desempenho dos colaboradores da Rocket Corp.
 
+> Novo por aqui? Confira o guia de [ONBOARDING](docs/ONBOARDING.md) para começar!
+
 ## 🎯 Sobre o Projeto
 
  A empresa Rocket Corp enfrenta desafios com seu processo de avaliação de desempenho, que é manual, fragmentado e suscetível a vieses.  Gestores relatam dificuldades em consolidar feedbacks e comparar desempenhos de forma estruturada.  A ausência de uma plataforma integrada dificulta a análise de dados e a tomada de decisões estratégicas sobre promoções e treinamentos.
