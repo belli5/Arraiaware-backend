@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
+import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 
 @Injectable()
 export class EvaluationsService {
@@ -74,5 +74,16 @@ export class EvaluationsService {
         },
       },
     });
+  }
+  async getUserStatus(userId: string, cycleId: string) {
+    const selfEvaluationDone = await this.prisma.selfEvaluation.findFirst({
+        where: { userId, cycleId }
+    });
+    
+    return {
+        userId,
+        cycleId,
+        status: selfEvaluationDone ? 'Concluído' : 'Pendente'
+    };
   }
 }
