@@ -1,37 +1,78 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
+import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
+import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 
 @Injectable()
 export class EvaluationsService {
   constructor(private prisma: PrismaService) {}
 
-  async submitSelfEvaluation(submitSelfEvaluationDto: SubmitSelfEvaluationDto) {
-    const { userId, cycleId, evaluations } = submitSelfEvaluationDto;
+  async submitSelfEvaluation(dto: SubmitSelfEvaluationDto) {
+    const { userId, cycleId, evaluations } = dto;
+    const dataToCreate = evaluations.map((ev) => ({
+      userId,
+      cycleId,
+      criterionId: ev.criterionId,
+      score: ev.score,
+      justification: ev.justification,
+    }));
+    return this.prisma.selfEvaluation.createMany({ data: dataToCreate });
+  }
 
-    const operations = evaluations.map((evaluation) =>
-      this.prisma.selfEvaluation.upsert({
-        where: {
-          userId_cycleId_criterionId: {
-            userId,
-            cycleId,
-            criterionId: evaluation.criterionId,
-          },
-        },
-        update: {
-          score: evaluation.score,
-          justification: evaluation.justification,
-        },
-        create: {
-          userId,
-          cycleId,
-          criterionId: evaluation.criterionId,
-          score: evaluation.score,
-          justification: evaluation.justification,
-        },
-      }),
-    );
+  async submitPeerEvaluation(dto: SubmitPeerEvaluationDto) {
+    const { evaluatorUserId, evaluatedUserId, cycleId, evaluations } = dto;
+    const dataToCreate = evaluations.map((ev) => ({
+      evaluatorUserId,
+      evaluatedUserId,
+      cycleId,
+      criterionId: ev.criterionId,
+      score: ev.score,
+      justification: ev.justification,
+    }));
+    return this.prisma.peerEvaluation.createMany({ data: dataToCreate });
+  }
 
-    return this.prisma.$transaction(operations);
+  async submitReferenceIndication(dto: SubmitReferenceIndicationDto) {
+    return this.prisma.referenceIndication.create({
+      data: dto,
+    });
+  }
+
+    async findSelfEvaluation(userId: string, cycleId: string) {
+    const evaluation = await this.prisma.selfEvaluation.findMany({
+      where: { userId, cycleId },
+      include: {
+        criterion: true,
+      },
+    });
+    if (!evaluation || evaluation.length === 0) {
+      throw new NotFoundException('Autoavaliação não encontrada para este usuário e ciclo.');
+    }
+    return evaluation;
+  }
+
+  async findPeerEvaluationsForUser(evaluatedUserId: string, cycleId: string) {
+    return this.prisma.peerEvaluation.findMany({
+      where: { evaluatedUserId, cycleId },
+      include: {
+        criterion: true,
+        evaluatorUser: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  }
+  
+
+  async findReferenceIndicationsForUser(indicatedUserId: string, cycleId: string) {
+    return this.prisma.referenceIndication.findMany({
+      where: { indicatedUserId, cycleId },
+      include: {
+        indicatorUser: {
+          select: { id: true, name: true },
+        },
+      },
+    });
   }
 }
