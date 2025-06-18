@@ -7,6 +7,7 @@ import { EvaluationsModule } from './evaluations/evaluations.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { RhModule } from './rh/rh.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from './users/users.module';
     CriteriaModule,
     CyclesModule,
     EvaluationsModule,
+    RhModule,
   ],
   controllers: [AppController],
   providers: [AppService],
