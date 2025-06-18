@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { EvaluationsService } from './evaluations.service';
-import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
+import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
+import { EvaluationsService } from './evaluations.service';
 
 @ApiTags('Evaluations')
 @Controller('api/evaluations')
@@ -60,5 +60,14 @@ export class EvaluationsController {
     @Query('cycleId', ParseUUIDPipe) cycleId: string,
   ) {
     return this.evaluationsService.findReferenceIndicationsForUser(userId, cycleId);
+  }
+  @Get('my-status/:userId')
+  @ApiOperation({ summary: 'Verificar o status da minha avaliação' })
+  @ApiQuery({ name: 'cycleId', type: 'string', required: true })
+  getMyStatus(
+      @Param('userId', ParseUUIDPipe) userId: string,
+      @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+      return this.evaluationsService.getUserStatus(userId, cycleId);
   }
 }
