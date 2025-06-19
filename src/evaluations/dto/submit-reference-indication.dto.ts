@@ -4,7 +4,7 @@ import { IsIn, IsNotEmpty, IsString, IsUUID } from 'class-validator';
 export class SubmitReferenceIndicationDto {
   @ApiProperty({ description: 'ID do colaborador que está fazendo a indicação' })
   @IsUUID()
-  indicatorUserId: string; // Em uma app real, viria do token de autenticação
+  indicatorUserId: string;
 
   @ApiProperty({ description: 'ID do colaborador que está sendo indicado como referência' })
   @IsUUID()

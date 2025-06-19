@@ -6,7 +6,7 @@ import { EvaluationItemDto } from './evaluation-item.dto';
 export class SubmitPeerEvaluationDto {
   @ApiProperty({ description: 'ID do colaborador que está realizando a avaliação' })
   @IsUUID()
-  evaluatorUserId: string; // Em uma app real, viria do token de autenticação
+  evaluatorUserId: string; 
 
   @ApiProperty({ description: 'ID do colaborador que está sendo avaliado' })
   @IsUUID()
