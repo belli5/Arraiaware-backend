@@ -3,6 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { ImportHistoryDto } from './dto/import-history.dto';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
+import { ImportUsersDto } from './dto/import-users.dto';
 
 @Injectable()
 export class RhService {
@@ -88,7 +91,7 @@ async exportCycleData(cycleId: string) {
 
     if (department) {
       filterConditions.push({
-        role: { name: { equals: department } },
+        role: { type: { equals: department } },
       });
     }
 
@@ -161,14 +164,70 @@ async exportCycleData(cycleId: string) {
         },
       };
   }
-    async importHistory(importData: ImportHistoryDto) {
+
+  async importUsers(dto: ImportUsersDto) {
     let createdCount = 0;
+    let existingCount = 0;
+
+    for (const userRecord of dto.users) {
+      const user = await this.prisma.user.upsert({
+        where: { email: userRecord.email },
+        update: {},
+        create: {
+          name: userRecord.name,
+          email: userRecord.email,
+          unidade: userRecord.unidade,
+          userType: 'Colaborador',
+          passwordHash: await bcrypt.hash(randomBytes(16).toString('hex'), 10),
+        },
+      });
+
+      const wasJustCreated = new Date().getTime() - user.createdAt.getTime() < 3000;
+      
+      if (wasJustCreated) {
+        createdCount++;
+        console.log(`Usuário ${user.email} criado. Uma senha de boas-vindas deveria ser enviada.`);
+      } else {
+        existingCount++;
+      }
+    }
+
+    return {
+      message: 'Importação de usuários concluída.',
+      createdUsers: createdCount,
+      existingUsers: existingCount,
+    };
+  }
+
+  async importHistory(importData: ImportHistoryDto) {
+    let createdEvaluationCount = 0;
+    let createdUserCount = 0;
+
     for (const record of importData.records) {
-      const user = await this.prisma.user.findUnique({ where: { email: record.userEmail } });
+
       const cycle = await this.prisma.evaluationCycle.findFirst({ where: { name: record.cycleName } });
       const criterion = await this.prisma.evaluationCriterion.findFirst({ where: { criterionName: record.criterionName } });
 
-      if (user && cycle && criterion && record.evaluationType === 'SELF') {
+      if (!cycle || !criterion) {
+        console.warn(`Ciclo ou critério não encontrado para o registro:`, record);
+        continue; 
+      }
+      const user = await this.prisma.user.upsert({
+        where: { email: record.userEmail },
+        
+        create: {
+          email: record.userEmail,
+          name: record.userEmail.split('@')[0],
+          userType: 'Colaborador',
+          passwordHash: await bcrypt.hash(randomBytes(16).toString('hex'), 10),
+        },
+        update: {},
+      });
+      
+      if (new Date().getTime() - user.createdAt.getTime() < 2000) {
+        createdUserCount++;
+      }
+      if (record.evaluationType === 'SELF') {
         await this.prisma.selfEvaluation.create({
           data: {
             userId: user.id,
@@ -178,10 +237,13 @@ async exportCycleData(cycleId: string) {
             justification: record.justification,
           },
         });
-        createdCount++;
+        createdEvaluationCount++;
       }
     }
-    return { message: `${createdCount} registros históricos importados com sucesso.` };
+    
+    return { 
+      message: `${createdEvaluationCount} registros de avaliação importados e ${createdUserCount} novos usuários criados com sucesso.` 
+    };
   }
 
 }
