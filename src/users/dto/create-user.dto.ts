@@ -1,4 +1,4 @@
-import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateUserDto {
@@ -33,6 +33,13 @@ export class CreateUserDto {
   @IsNotEmpty()
   userType: string;
 
+  @ApiPropertyOptional({
+    description: 'Unidade à qual o colaborador pertence.',
+    example: 'Belo Horizonte',
+  })
+  @IsString()
+  @IsOptional()
+  unidade?: string; 
   
   @ApiHideProperty()
   @IsUUID()
