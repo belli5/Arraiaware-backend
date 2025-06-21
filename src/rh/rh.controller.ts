@@ -3,6 +3,7 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RhService } from './rh.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { ImportHistoryDto } from './dto/import-history.dto';
+import { ImportUsersDto } from './dto/import-users.dto';
 
 @ApiTags('RH & Admin')
 @Controller('api/rh')
@@ -39,5 +40,12 @@ export class RhController {
   @ApiResponse({ status: 201, description: 'Dados históricos importados com sucesso.'})
   importHistory(@Body() importDto: ImportHistoryDto) {
     return this.rhService.importHistory(importDto);
+  }
+
+  @Post('import/users')
+  @ApiOperation({ summary: 'Importar e criar uma lista de usuários' })
+  @ApiResponse({ status: 201, description: 'Usuários importados com sucesso.' })
+  importUsers(@Body() importUsersDto: ImportUsersDto) {
+    return this.rhService.importUsers(importUsersDto);
   }
 }
