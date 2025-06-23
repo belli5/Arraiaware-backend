@@ -7,9 +7,11 @@ export class CreateCriterionDto {
     example: 'Comportamento',
     enum: ['Comportamento', 'Execução', 'Gestão e Liderança'],
   })
-  @IsString()
-  @IsNotEmpty()
-  @IsIn(['Comportamento', 'Execução', 'Gestão e Liderança'])
+  @IsString({ message: 'O pilar deve ser uma string.' })
+  @IsNotEmpty({ message: 'O pilar não pode ser vazio.' })
+  @IsIn(['Comportamento', 'Execução', 'Gestão e Liderança'], {
+    message: 'O pilar deve ser um dos seguintes: Comportamento, Execução, Gestão e Liderança.',
+  })
   pillar: string;
 
   @ApiProperty({
