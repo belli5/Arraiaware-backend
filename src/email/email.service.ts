@@ -5,11 +5,20 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class EmailService {
   private transporter: nodemailer.Transporter;
-  private readonly logger = new Logger(EmailService.name); 
+  private readonly logger = new Logger(EmailService.name);
 
   constructor(private configService: ConfigService) {
+    const smtpHost = this.configService.get<string>('SMTP_HOST');
+    const smtpPort = this.configService.get<number>('SMTP_PORT');
+    const smtpSecure = this.configService.get<boolean>('SMTP_SECURE');
     const smtpUser = this.configService.get<string>('SMTP_USER');
     const smtpPass = this.configService.get<string>('SMTP_PASS');
+
+   
+    this.logger.log(`SMTP_HOST lido: ${smtpHost}`);
+    this.logger.log(`SMTP_PORT lido: ${smtpPort}`);
+    this.logger.log(`SMTP_SECURE lido: ${smtpSecure}`);
+    this.logger.log(`SMTP_USER lido: ${smtpUser || '[Vazio]'}`);
 
     const authOptions = (smtpUser && smtpPass) ? {
       user: smtpUser,
@@ -17,11 +26,12 @@ export class EmailService {
     } : undefined; 
 
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST'),
-      port: this.configService.get<number>('SMTP_PORT'),
-      secure: this.configService.get<number>('SMTP_PORT') === 465,
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
       auth: authOptions,
     });
+    this.logger.log('Nodemailer transporter configurado.');
   }
 
   async sendWelcomeEmail(to: string, initialPassword: string) {
@@ -41,12 +51,16 @@ export class EmailService {
       `,
     };
 
+  
+    this.logger.log(`Tentando enviar e-mail de boas-vindas para: ${to}`);
+    this.logger.debug(`Opções do e-mail (destinatário e assunto): Para: ${mailOptions.to}, Assunto: ${mailOptions.subject}`);
+
+
     try {
-      await this.transporter.sendMail(mailOptions);
+      const info = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email de boas-vindas enviado com sucesso para: ${to}. Mensagem ID: ${info.messageId}`);
     } catch (error) {
-     
       this.logger.error(`Erro ao enviar email de boas-vindas para ${to}: ${error.message}`, error.stack);
-      
     }
   }
 }
