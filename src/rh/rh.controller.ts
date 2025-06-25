@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RhService } from './rh.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { ImportHistoryDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('RH & Admin')
 @Controller('api/rh')
@@ -43,9 +44,26 @@ export class RhController {
   }
 
   @Post('import/users')
-  @ApiOperation({ summary: 'Importar e criar uma lista de usuários' })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data') // Este decorador indica que o endpoint aceita dados de formulário com arquivos
+  @ApiOperation({ summary: 'Importar e criar uma lista de usuários a partir de um arquivo XLSX' })
   @ApiResponse({ status: 201, description: 'Usuários importados com sucesso.' })
-  importUsers(@Body() importUsersDto: ImportUsersDto) {
-    return this.rhService.importUsers(importUsersDto);
+  // 2. Adicione o decorador ApiBody aqui
+  @ApiBody({
+    description: 'Arquivo XLSX contendo os dados dos usuários (colunas: name, email, unidade)',
+    required: true,
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary', // O formato 'binary' instrui o Swagger a exibir um botão de upload de arquivo
+        },
+      },
+    },
+  })
+  importUsers(@UploadedFile() file: Express.Multer.File) {
+    // A lógica do serviço para processar o arquivo permanece a mesma
+    return this.rhService.importUsersFromXlsx(file);
   }
 }
