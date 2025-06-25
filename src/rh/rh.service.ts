@@ -1,4 +1,3 @@
-// src/rh/rh.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -171,21 +170,13 @@ export class RhService {
     };
   }
 
-  async importUsersFromXlsx(file: Express.Multer.File) {
-    if (!file) {
+  async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
+    if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
 
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const usersJson: any[] = XLSX.utils.sheet_to_json(sheet);
+    let allUsers = [];
 
-    if (!usersJson || usersJson.length === 0) {
-      throw new BadRequestException('A planilha está vazia ou em formato incorreto.');
-    }
-
-    // Função auxiliar para encontrar um valor na linha, ignorando maiúsculas/minúsculas e espaços
     const findValue = (row: any, possibleKeys: string[]) => {
       for (const key in row) {
         const normalizedKey = key.trim().toLowerCase();
@@ -195,32 +186,45 @@ export class RhService {
       }
       return undefined;
     };
-    
-    const mappedUsers = usersJson.map((row, index) => {
-        // Mapeia as colunas da sua planilha para os campos do sistema
+
+    for (const file of files) {
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const usersJson: any[] = XLSX.utils.sheet_to_json(sheet);
+
+      if (!usersJson || usersJson.length === 0) {
+        console.warn(`Arquivo ${file.originalname} está vazio ou em formato incorreto. Pulando.`);
+        continue;
+      }
+      
+      const mappedUsers = usersJson.map((row, index) => {
         const name = findValue(row, ['nome', 'name']);
         const email = findValue(row, ['email']);
         const unidade = findValue(row, ['unidade', 'unit']);
 
         if (!name || !email) {
-            throw new BadRequestException(`A linha ${index + 2} da planilha não contém um valor válido para 'Nome' ou 'Email'. Verifique os cabeçalhos.`);
+          console.warn(`A linha ${index + 2} do arquivo ${file.originalname} é inválida. Pulando.`);
+          return null;
         }
 
         return { name, email, unidade };
-    });
+      }).filter(user => user !== null);
 
-    if (mappedUsers.length === 0) {
-        throw new BadRequestException("Nenhum registro de usuário válido foi encontrado na planilha.");
+      allUsers = allUsers.concat(mappedUsers);
+    }
+
+    if (allUsers.length === 0) {
+      throw new BadRequestException("Nenhum registro de usuário válido foi encontrado nos arquivos enviados.");
     }
 
     const importUsersDto: ImportUsersDto = {
-      users: mappedUsers,
+      users: allUsers,
     };
-    
+
     return this.importUsers(importUsersDto);
   }
 
-  // Sua função original de importUsers continua a mesma
   async importUsers(dto: ImportUsersDto) {
     let createdCount = 0;
     let existingCount = 0;
