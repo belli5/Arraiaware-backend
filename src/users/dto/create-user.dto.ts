@@ -1,5 +1,6 @@
 import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { UserType } from '@prisma/client';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -26,12 +27,13 @@ export class CreateUserDto {
   password: string;
 
   @ApiProperty({
-    description: 'Tipo do usuário no sistema (Colaborador, Gestor, RH, etc.)',
-    example: 'Colaborador',
+    description: 'Tipo do usuário no sistema',
+    enum: UserType, 
+    example: UserType.COLABORADOR,
   })
-  @IsString()
+  @IsEnum(UserType)
   @IsNotEmpty()
-  userType: string;
+  userType: UserType;
 
   @ApiPropertyOptional({
     description: 'Unidade à qual o colaborador pertence.',
