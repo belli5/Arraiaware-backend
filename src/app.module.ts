@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CriteriaModule } from './criteria/criteria.module';
 import { CyclesModule } from './cycles/cycles.module';
-import { EmailModule } from './email/email.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RhModule } from './rh/rh.module';
@@ -12,6 +15,10 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    AuthModule,
     PrismaModule,
     UsersModule,
     RolesModule,
@@ -19,9 +26,15 @@ import { UsersModule } from './users/users.module';
     CyclesModule,
     EvaluationsModule,
     RhModule,
-    EmailModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+  
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
