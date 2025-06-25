@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RhService } from './rh.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { ImportHistoryDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('RH & Admin')
 @Controller('api/rh')
@@ -43,27 +43,28 @@ export class RhController {
     return this.rhService.importHistory(importDto);
   }
 
-  @Post('import/users')
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiConsumes('multipart/form-data') // Este decorador indica que o endpoint aceita dados de formulário com arquivos
-  @ApiOperation({ summary: 'Importar e criar uma lista de usuários a partir de um arquivo XLSX' })
+  @Post('import/users/batch')
+  @UseInterceptors(FilesInterceptor('files', 20))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Importar usuários de um ou mais arquivos XLSX' })
   @ApiResponse({ status: 201, description: 'Usuários importados com sucesso.' })
-  // 2. Adicione o decorador ApiBody aqui
   @ApiBody({
-    description: 'Arquivo XLSX contendo os dados dos usuários (colunas: name, email, unidade)',
+    description: 'Um ou mais arquivos XLSX contendo os dados dos usuários',
     required: true,
     schema: {
       type: 'object',
       properties: {
-        file: {
-          type: 'string',
-          format: 'binary', // O formato 'binary' instrui o Swagger a exibir um botão de upload de arquivo
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
         },
       },
     },
   })
-  importUsers(@UploadedFile() file: Express.Multer.File) {
-    // A lógica do serviço para processar o arquivo permanece a mesma
-    return this.rhService.importUsersFromXlsx(file);
+  importUsersBatch(@UploadedFiles() files: Array<Express.Multer.File>) {
+    return this.rhService.importUsersFromMultipleXlsx(files);
   }
 }
