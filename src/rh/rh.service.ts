@@ -1,5 +1,5 @@
 // src/rh/rh.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { ImportHistoryDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
+import * as XLSX from 'xlsx';
 
 @Injectable()
 export class RhService {
@@ -170,24 +171,81 @@ export class RhService {
     };
   }
 
+  async importUsersFromXlsx(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const usersJson: any[] = XLSX.utils.sheet_to_json(sheet);
+
+    if (!usersJson || usersJson.length === 0) {
+      throw new BadRequestException('A planilha está vazia ou em formato incorreto.');
+    }
+
+    // Função auxiliar para encontrar um valor na linha, ignorando maiúsculas/minúsculas e espaços
+    const findValue = (row: any, possibleKeys: string[]) => {
+      for (const key in row) {
+        const normalizedKey = key.trim().toLowerCase();
+        if (possibleKeys.some(pk => normalizedKey.startsWith(pk))) {
+          return row[key];
+        }
+      }
+      return undefined;
+    };
+    
+    const mappedUsers = usersJson.map((row, index) => {
+        // Mapeia as colunas da sua planilha para os campos do sistema
+        const name = findValue(row, ['nome', 'name']);
+        const email = findValue(row, ['email']);
+        const unidade = findValue(row, ['unidade', 'unit']);
+
+        if (!name || !email) {
+            throw new BadRequestException(`A linha ${index + 2} da planilha não contém um valor válido para 'Nome' ou 'Email'. Verifique os cabeçalhos.`);
+        }
+
+        return { name, email, unidade };
+    });
+
+    if (mappedUsers.length === 0) {
+        throw new BadRequestException("Nenhum registro de usuário válido foi encontrado na planilha.");
+    }
+
+    const importUsersDto: ImportUsersDto = {
+      users: mappedUsers,
+    };
+    
+    return this.importUsers(importUsersDto);
+  }
+
+  // Sua função original de importUsers continua a mesma
   async importUsers(dto: ImportUsersDto) {
     let createdCount = 0;
     let existingCount = 0;
 
     for (const userRecord of dto.users) {
-      
+      if (!userRecord || !userRecord.email) {
+        console.warn('Registro de usuário inválido pulado:', userRecord);
+        continue;
+      }
+
       const initialPassword = randomBytes(8).toString('hex');
       const hashedPassword = await bcrypt.hash(initialPassword, 10);
 
       const user = await this.prisma.user.upsert({
         where: { email: userRecord.email },
-        update: {},
+        update: {
+            name: userRecord.name,
+            unidade: userRecord.unidade,
+        },
         create: {
           name: userRecord.name,
           email: userRecord.email,
           unidade: userRecord.unidade,
           userType: 'Colaborador',
-          passwordHash: hashedPassword, 
+          passwordHash: hashedPassword,
         },
       });
 
@@ -209,6 +267,7 @@ export class RhService {
       existingUsers: existingCount,
     };
   }
+
 
   async importHistory(importData: ImportHistoryDto) {
     let createdEvaluationCount = 0;
