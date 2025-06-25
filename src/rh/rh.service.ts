@@ -1,6 +1,6 @@
 // src/rh/rh.service.ts
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { EmailService } from '../email/email.service';
@@ -244,7 +244,7 @@ export class RhService {
           name: userRecord.name,
           email: userRecord.email,
           unidade: userRecord.unidade,
-          userType: 'Colaborador',
+          userType: UserType.COLABORADOR,
           passwordHash: hashedPassword,
         },
       });
@@ -296,7 +296,7 @@ export class RhService {
           data: {
             email: record.userEmail,
             name: record.userEmail.split('@')[0],
-            userType: 'Colaborador',
+            userType: UserType.COLABORADOR,
             passwordHash: passwordHash,
           },
         });
