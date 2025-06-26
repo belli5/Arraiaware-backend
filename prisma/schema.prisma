@@ -7,36 +7,29 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-enum UserType{
-  COLABORADOR
-  RH
-  GESTOR
-  ADMIN
-}
-
 model User {
-  id                String    @id @default(uuid())
-  name              String
-  email             String    @unique
-  passwordHash      String
-  userType          UserType
-  unidade           String?
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  userType           UserType
+  unidade            String?
+  isActive           Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  roleId             String?
+  leaderId           String?
 
-  role              Role?     @relation(fields: [roleId], references: [id])
-  roleId            String?
+  role               Role?     @relation(fields: [roleId], references: [id])
+  leader             User?     @relation("LeaderTeam", fields: [leaderId], references: [id])
+  teamMembers        User[]    @relation("LeaderTeam")
+  selfEvaluations    SelfEvaluation[]
 
-  leader            User?     @relation("LeaderFollower", fields: [leaderId], references: [id])
-  leaderId          String?
-  followers         User[]    @relation("LeaderFollower")
+  evaluationsReceived  PeerEvaluation[] @relation("EvaluatedUser")
+  evaluationsGiven     PeerEvaluation[] @relation("EvaluatorUser")
 
-  selfEvaluations   SelfEvaluation[]
-  peerEvaluations   PeerEvaluation[]   @relation("Evaluated")
-  givenEvaluations  PeerEvaluation[]   @relation("Evaluator")
-  indicatedReferences ReferenceIndication[] @relation("Indicator")
-  receivedReferences  ReferenceIndication[] @relation("Indicated")
+  referencesIndicated  ReferenceIndication[] @relation("IndicatorUser")
+  referencesReceived   ReferenceIndication[] @relation("IndicatedUser")
 }
 
 model Role {
@@ -51,76 +44,80 @@ model Role {
 model EvaluationCriterion {
   id            String   @id @default(uuid())
   pillar        String
-  criterionName String
+  criterionName String   @unique
   description   String?
   roles         RoleCriteria[]
   selfEvaluations SelfEvaluation[]
-  peerEvaluations PeerEvaluation[]
+
 }
 
 model RoleCriteria {
-  role        Role     @relation(fields: [roleId], references: [id])
-  roleId      String
-  criterion   EvaluationCriterion @relation(fields: [criterionId], references: [id])
+  roleId      String              
   criterionId String
+  role        Role                @relation(fields: [roleId], references: [id])
+  criterion   EvaluationCriterion @relation(fields: [criterionId], references: [id])
 
   @@id([roleId, criterionId])
 }
 
 model EvaluationCycle {
-  id                   String   @id @default(uuid())
-  name                 String
-  startDate            DateTime
-  endDate              DateTime
-  status               String
-  
-  selfEvaluations      SelfEvaluation[]
-  peerEvaluations      PeerEvaluation[]
+  id              String   @id @default(uuid())
+  name            String   @unique
+  startDate       DateTime
+  endDate         DateTime
+  status          String
+  selfEvaluations SelfEvaluation[]
+  peerEvaluations PeerEvaluation[]
   referenceIndications ReferenceIndication[]
 }
 
 model SelfEvaluation {
-  id                String   @id @default(uuid())
-  score             Int
-  justification     String
-  submissionStatus  String   @default("Pendente")
-
-  user              User     @relation(fields: [userId], references: [id])
-  userId            String
-  cycle             EvaluationCycle @relation(fields: [cycleId], references: [id])
-  cycleId           String
-  criterion         EvaluationCriterion @relation(fields: [criterionId], references: [id])
-  criterionId       String
+  id                 String    @id @default(uuid())
+  score              Int
+  justification      String
+  scoreDescription   String?
+  submissionStatus   String    @default("Pendente")
+  userId             String
+  cycleId            String
+  criterionId        String
+  user               User      @relation(fields: [userId], references: [id])
+  cycle              EvaluationCycle @relation(fields: [cycleId], references: [id])
+  criterion          EvaluationCriterion @relation(fields: [criterionId], references: [id])
 
   @@unique([userId, cycleId, criterionId])
 }
 
 model PeerEvaluation {
-  id            String   @id @default(uuid())
-  score         Int
-  justification String
-
-  evaluatedUser User     @relation("Evaluated", fields: [evaluatedUserId], references: [id])
-  evaluatedUserId String
-  evaluatorUser User     @relation("Evaluator", fields: [evaluatorUserId], references: [id])
-  evaluatorUserId String
-  cycle         EvaluationCycle @relation(fields: [cycleId], references: [id])
-  cycleId       String
-  criterion     EvaluationCriterion @relation(fields: [criterionId], references: [id])
-  criterionId   String
+  id                   String    @id @default(uuid())
+  project              String?
+  motivatedToWorkAgain String?
+  generalScore         Float
+  pointsToImprove      String
+  pointsToExplore      String
   
-  @@unique([evaluatedUserId, evaluatorUserId, cycleId, criterionId])
+  evaluatedUserId      String?
+  evaluatorUserId      String
+  cycleId              String
+  
+  evaluatedUser        User?     @relation("EvaluatedUser", fields: [evaluatedUserId], references: [id])
+  evaluatorUser        User      @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id])
+  cycle                EvaluationCycle @relation(fields: [cycleId], references: [id])
 }
 
 model ReferenceIndication {
   id              String   @id @default(uuid())
-  referenceType   String
   justification   String
-
-  indicatedUser   User     @relation("Indicated", fields: [indicatedUserId], references: [id])
-  indicatedUserId String
-  indicatorUser   User     @relation("Indicator", fields: [indicatorUserId], references: [id])
+  indicatedUserId String?
   indicatorUserId String
-  cycle           EvaluationCycle @relation(fields: [cycleId], references: [id])
   cycleId         String
+  
+  indicatedUser   User?    @relation("IndicatedUser", fields: [indicatedUserId], references: [id])
+  indicatorUser   User     @relation("IndicatorUser", fields: [indicatorUserId], references: [id])
+  cycle           EvaluationCycle @relation(fields: [cycleId], references: [id])
+}
+
+enum UserType {
+  COLABORADOR
+  GESTOR
+  ADMIN
 }
