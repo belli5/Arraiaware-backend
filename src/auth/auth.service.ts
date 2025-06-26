@@ -42,23 +42,19 @@ export class AuthService {
     return result as UserWithoutHashAndWithRole; 
   }
 
-  async login(user: UserWithoutHashAndWithRole): Promise<{ access_token: string; user: UserWithoutHashAndWithRole }> {
+  async login(user: UserWithoutHashAndWithRole): Promise<{ access_token: string }> {
     this.logger.debug(`[AuthService] Gerando token para o usuário: ${user.email}`);
 
-    
     const payload = { 
       email: user.email, 
       sub: user.id, 
       name: user.name,
       userType: user.userType, 
-     
       roleType: user.role?.type, 
     }; 
 
-    
     return {
       access_token: this.jwtService.sign(payload),
-      user: user, 
     };
   }
 }
