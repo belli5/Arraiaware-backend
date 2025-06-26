@@ -12,7 +12,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
-    console.log('🛡️ Guard está verificando a rota. Cabeçalho Authorization:', authHeader);
+
+    
+    if (request.url.startsWith('/api-docs')) {
+      return true;
+    }
 
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
@@ -20,7 +24,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
-      console.log('🚶 Rota é pública, acesso permitido.');
       return true;
     }
 
