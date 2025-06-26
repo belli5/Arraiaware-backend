@@ -35,14 +35,7 @@ export class RhController {
   getPaginatedEvaluations(@Query() queryDto: GetEvaluationsQueryDto) {
     return this.rhService.findPaginatedEvaluations(queryDto);
   }
-
-  @Post('import/history')
-  @ApiOperation({ summary: 'Importar dados históricos de avaliações' })
-  @ApiResponse({ status: 201, description: 'Dados históricos importados com sucesso.'})
-  importHistory(@Body() importDto: ImportHistoryDto) {
-    return this.rhService.importHistory(importDto);
-  }
-
+  
   @Post('import/users/batch')
   @UseInterceptors(FilesInterceptor('files', 20))
   @ApiConsumes('multipart/form-data')
@@ -66,5 +59,30 @@ export class RhController {
   })
   importUsersBatch(@UploadedFiles() files: Array<Express.Multer.File>) {
     return this.rhService.importUsersFromMultipleXlsx(files);
+  }
+
+  @Post('import/history/batch')
+  @UseInterceptors(FilesInterceptor('files', 20))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Importar histórico de avaliações de um ou mais arquivos XLSX' })
+  @ApiResponse({ status: 201, description: 'Histórico importado com sucesso.' })
+  @ApiBody({
+    description: 'Um ou mais ficheiros XLSX contendo o histórico de avaliações.',
+    required: true,
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+    },
+  })
+  importHistoryBatch(@UploadedFiles() files: Array<Express.Multer.File>) {
+    return this.rhService.importHistoryFromMultipleXlsx(files);
   }
 }
