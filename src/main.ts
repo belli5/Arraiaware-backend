@@ -2,7 +2,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { UserType } from '@prisma/client';
+// import { UserType } from '@prisma/client';
 import { AppModule } from './app.module';
 import { UsersService } from './users/users.service';
 
@@ -60,7 +60,7 @@ async function bootstrap() {
         name: 'Administrador do Sistema',
         email: adminEmail,
         password: adminPassword,
-        userType: UserType.ADMIN,
+        userType: 'ADMIN',
         unidade: 'Corporativo', 
       });
       seedLogger.log('Usuário admin criado com sucesso!');
