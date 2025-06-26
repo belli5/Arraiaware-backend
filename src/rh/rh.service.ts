@@ -2,12 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import * as XLSX from 'xlsx';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
-import { ImportHistoryDto } from './dto/import-history.dto';
+import { HistoryItemDto, ImportHistoryDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
-import * as XLSX from 'xlsx';
 
 @Injectable()
 export class RhService {
@@ -54,7 +54,6 @@ export class RhService {
       include: {
         evaluatedUser: { select: { name: true } },
         evaluatorUser: { select: { name: true } },
-        criterion: { select: { criterionName: true } },
       },
     });
 
@@ -85,67 +84,35 @@ export class RhService {
       throw new NotFoundException('Nenhum ciclo de avaliação encontrado.');
     }
 
-    const where: Prisma.UserWhereInput = {
-      isActive: true,
-    };
-
+    const where: Prisma.UserWhereInput = { isActive: true };
     const filterConditions: Prisma.UserWhereInput[] = [];
 
-    if (department) {
-      filterConditions.push({
-        role: { type: { equals: department } },
-      });
-    }
+    if (department) filterConditions.push({ role: { type: { equals: department } } });
+    if (search) filterConditions.push({ OR: [{ name: { contains: search } }, { role: { name: { contains: search } } }] });
+    if (filterConditions.length > 0) where.AND = filterConditions;
 
-    if (search) {
-      filterConditions.push({
-        OR: [
-          { name: { contains: search } },
-          { role: { name: { contains: search } } },
-        ],
-      });
-    }
-
-    if (filterConditions.length > 0) {
-      where.AND = filterConditions;
-    }
-    const completedUserIds = (
-      await this.prisma.selfEvaluation.findMany({
-        where: { cycleId: currentCycle.id },
-        distinct: ['userId'],
-        select: { userId: true },
-      })
-    ).map((ev) => ev.userId);
+    const completedUserIds = (await this.prisma.selfEvaluation.findMany({
+      where: { cycleId: currentCycle.id },
+      distinct: ['userId'],
+      select: { userId: true },
+    })).map((ev) => ev.userId);
 
     const isOverdue = new Date() > new Date(currentCycle.endDate);
 
-    if (status === 'Concluída') {
-      where.id = { in: completedUserIds };
-    } else if (status === 'Pendente') {
-      where.id = { notIn: completedUserIds };
-    } else if (status === 'Em Atraso') {
-      if (!isOverdue)
-        return { data: [], pagination: { totalItems: 0, totalPages: 0, currentPage: page } };
+    if (status === 'Concluída') where.id = { in: completedUserIds };
+    else if (status === 'Pendente') where.id = { notIn: completedUserIds };
+    else if (status === 'Em Atraso') {
+      if (!isOverdue) return { data: [], pagination: { totalItems: 0, totalPages: 0, currentPage: page } };
       where.id = { notIn: completedUserIds };
     }
 
     const [totalItems, users] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
-      this.prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        include: { role: true },
-      }),
+      this.prisma.user.findMany({ where, skip, take: limit, include: { role: true } }),
     ]);
 
     const data = users.map((user) => {
-      const userStatus = completedUserIds.includes(user.id)
-        ? 'Concluída'
-        : isOverdue
-          ? 'Em Atraso'
-          : 'Pendente';
-
+      const userStatus = completedUserIds.includes(user.id) ? 'Concluída' : isOverdue ? 'Em Atraso' : 'Pendente';
       return {
         id: user.id,
         collaborator: user.name,
@@ -159,17 +126,10 @@ export class RhService {
     });
 
     const totalPages = Math.ceil(totalItems / limit);
-
-    return {
-      data,
-      pagination: {
-        totalItems,
-        totalPages,
-        currentPage: page,
-      },
-    };
+    return { data, pagination: { totalItems, totalPages, currentPage: page } };
   }
 
+  // --- FUNÇÃO REINSERIDA ---
   async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
     if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo enviado.');
@@ -234,16 +194,11 @@ export class RhService {
         console.warn('Registro de usuário inválido pulado:', userRecord);
         continue;
       }
-
       const initialPassword = randomBytes(8).toString('hex');
       const hashedPassword = await bcrypt.hash(initialPassword, 10);
-
       const user = await this.prisma.user.upsert({
         where: { email: userRecord.email },
-        update: {
-            name: userRecord.name,
-            unidade: userRecord.unidade,
-        },
+        update: { name: userRecord.name, unidade: userRecord.unidade },
         create: {
           name: userRecord.name,
           email: userRecord.email,
@@ -252,126 +207,204 @@ export class RhService {
           passwordHash: hashedPassword,
         },
       });
-
       const wasJustCreated = new Date().getTime() - user.createdAt.getTime() < 3000;
-
       if (wasJustCreated) {
         createdCount++;
         await this.emailService.sendWelcomeEmail(user.email, initialPassword);
-        console.log(`Usuário ${user.email} criado. E-mail de boas-vindas disparado.`);
       } else {
         existingCount++;
-        console.log(`Usuário ${user.email} já existe. Não enviando e-mail de boas-vindas.`);
+      }
+    }
+    return { message: 'Importação de usuários concluída.', createdUsers: createdCount, existingUsers: existingCount };
+  }
+
+  async importHistoryFromMultipleXlsx(files: Array<Express.Multer.File>) {
+    // ... Esta função permanece a mesma e está correta
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+
+    let allRecords: HistoryItemDto[] = [];
+
+    const findValue = (row: any, keys: string[]) => {
+      for (const key in row) {
+        const normalizedKey = key.trim().toLowerCase().replace(/\s+/g, ' ');
+        for (const searchKey of keys) {
+          if (normalizedKey.includes(searchKey.toLowerCase())) {
+            return row[key];
+          }
+        }
+      }
+      return undefined;
+    };
+
+    for (const file of files) {
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      
+      const profileSheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('perfil'));
+      if (!profileSheetName) {
+        console.warn(`[AVISO] Arquivo ${file.originalname} não contém uma aba 'Perfil'. Pulando...`);
+        continue;
+      }
+      
+      const profileSheet = workbook.Sheets[profileSheetName];
+      const profileData: any[] = XLSX.utils.sheet_to_json(profileSheet);
+      if (profileData.length === 0) continue;
+
+      const userEmail = findValue(profileData[0], ['email']);
+      const cycleName = findValue(profileData[0], ['ciclo']);
+
+      if (!userEmail || !cycleName) {
+        console.warn(`[AVISO] Não foi possível extrair email ou ciclo da aba 'Perfil' do ficheiro ${file.originalname}. Pulando...`);
+        continue;
+      }
+      
+      for (const sheetName of workbook.SheetNames) {
+        if (sheetName.toLowerCase().includes('perfil')) continue;
+
+        const sheet = workbook.Sheets[sheetName];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+        if (rows.length === 0) continue;
+
+        const headers = Object.keys(rows[0]).map(h => h.trim().toLowerCase());
+
+        if (headers.includes('auto-avaliação')) {
+          rows.forEach(row => {
+            allRecords.push({
+              userEmail: userEmail,
+              cycleName: cycleName.toString(),
+              evaluationType: 'SELF',
+              criterionName: findValue(row, ['critério']),
+              score: findValue(row, ['auto-avaliação']),
+              scoreDescription: findValue(row, ['descrição nota']), 
+              justification: findValue(row, ['dados e fatos']),
+            });
+          });
+        } else if (headers.includes('dê uma nota geral para o colaborador')) {
+          rows.forEach(row => {
+            allRecords.push({
+              userEmail: userEmail,
+              cycleName: cycleName.toString(),
+              evaluationType: 'PEER',
+              evaluatorEmail: findValue(row, ['email do avaliado']),
+              project: findValue(row, ['projeto em que atuaram juntos']),
+              motivatedToWorkAgain: findValue(row, ['motivado em trabalhar novamente']),
+              generalScore: findValue(row, ['nota geral']),
+              pointsToImprove: findValue(row, ['pontos que deve melhorar']),
+              pointsToExplore: findValue(row, ['pontos que faz bem']),
+            });
+          });
+        } else if (headers.includes('justificativa') && headers.includes('email da referência')) {
+          rows.forEach(row => {
+            allRecords.push({
+                userEmail: userEmail,
+                cycleName: cycleName.toString(),
+                evaluationType: 'REFERENCE',
+                indicatedEmail: findValue(row, ['email da referência']),
+                justification: findValue(row, ['justificativa']),
+            });
+          });
+        }
       }
     }
 
-    return {
-      message: 'Importação de usuários concluída.',
-      createdUsers: createdCount,
-      existingUsers: existingCount,
-    };
-  }
+    if (allRecords.length === 0) {
+      throw new BadRequestException("Nenhum registro de histórico válido foi encontrado nos arquivos enviados. Verifique os nomes das colunas e o conteúdo dos ficheiros.");
+    }
 
+    return this.importHistory({ records: allRecords });
+  }
 
   async importHistory(importData: ImportHistoryDto) {
     let createdEvaluationCount = 0;
     let createdUserCount = 0;
 
     for (const record of importData.records) {
-      const cycle = await this.prisma.evaluationCycle.findFirst({ where: { name: record.cycleName } });
-      const criterion = await this.prisma.evaluationCriterion.findFirst({ where: { criterionName: record.criterionName } });
-
-      if (!cycle || !criterion) {
-        console.warn(`Ciclo ou critério não encontrado para o registro:`, record);
+      if (!record.userEmail || !record.cycleName || !record.evaluationType) {
+        console.warn('[AVISO] Registro de histórico inválido ignorado:', record);
         continue;
       }
 
-      const existingUser = await this.prisma.user.findUnique({
-        where: { email: record.userEmail },
+      const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(record.userEmail);
+      if (userWasCreated) createdUserCount++;
+
+      const cycle = await this.prisma.evaluationCycle.upsert({
+        where: { name: record.cycleName.toString() },
+        update: {},
+        create: { name: record.cycleName.toString(), startDate: new Date(), endDate: new Date(), status: "Fechado" },
       });
 
-      let user = existingUser;
+      try {
+        if (record.evaluationType === 'SELF' && record.criterionName && record.score) {
+          const criterion = await this.prisma.evaluationCriterion.upsert({
+            where: { criterionName: record.criterionName },
+            update: {},
+            create: { criterionName: record.criterionName, pillar: "Comportamento", description: "Critério importado automaticamente." },
+          });
 
-      if (!user) {
-        const initialPassword = randomBytes(8).toString('hex');
-        const passwordHash = await bcrypt.hash(initialPassword, 10);
+          const data = { userId, cycleId: cycle.id, criterionId: criterion.id, score: record.score, justification: record.justification, scoreDescription: record.scoreDescription, submissionStatus: 'Concluído' };
+          await this.prisma.selfEvaluation.upsert({
+            where: { userId_cycleId_criterionId: { userId, cycleId: cycle.id, criterionId: criterion.id } },
+            update: data,
+            create: data,
+          });
+          createdEvaluationCount++;
 
-        user = await this.prisma.user.create({
-          data: {
-            email: record.userEmail,
-            name: record.userEmail.split('@')[0],
-            userType: UserType.COLABORADOR,
-            passwordHash: passwordHash,
-          },
-        });
+        } else if (record.evaluationType === 'PEER' && record.evaluatorEmail && record.generalScore) {
+          const { id: evaluatorId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(record.evaluatorEmail);
+          if (evaluatorWasCreated) createdUserCount++;
 
-        createdUserCount++;
+          const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
+            where: { evaluatedUserId: userId, evaluatorUserId: evaluatorId, cycleId: cycle.id }
+          });
+          
+          const data = { evaluatedUserId: userId, evaluatorUserId: evaluatorId, cycleId: cycle.id, project: record.project, motivatedToWorkAgain: record.motivatedToWorkAgain, generalScore: record.generalScore, pointsToImprove: record.pointsToImprove, pointsToExplore: record.pointsToExplore };
+          
+          if(existingPeerEval){
+              await this.prisma.peerEvaluation.update({ where: { id: existingPeerEval.id }, data });
+          } else {
+              await this.prisma.peerEvaluation.create({ data });
+          }
+          createdEvaluationCount++;
 
-        await this.emailService.sendWelcomeEmail(user.email, initialPassword);
-      }
+        } else if (record.evaluationType === 'REFERENCE' && record.indicatedEmail && record.justification) {
+          const { id: indicatedId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(record.indicatedEmail);
+          if (indicatedWasCreated) createdUserCount++;
 
-      if (record.evaluationType === 'SELF') {
-        await this.prisma.selfEvaluation.upsert({
-          where: {
-            userId_cycleId_criterionId: {
-              userId: user.id,
-              cycleId: cycle.id,
-              criterionId: criterion.id,
-            },
-          },
-          update: {
-            score: record.score,
-            justification: record.justification,
-            submissionStatus: 'Concluído',
-          },
-          create: {
-            userId: user.id,
-            cycleId: cycle.id,
-            criterionId: criterion.id,
-            score: record.score,
-            justification: record.justification,
-            submissionStatus: 'Concluído',
-          },
-        });
-        createdEvaluationCount++;
-      } else if (record.evaluationType === 'PEER') {
-        const evaluatorUser = await this.prisma.user.findUnique({
-          where: { email: record.evaluatorEmail },
-        });
+          const existingReference = await this.prisma.referenceIndication.findFirst({
+              where: { indicatorUserId: userId, indicatedUserId: indicatedId, cycleId: cycle.id }
+          });
 
-        if (!evaluatorUser) {
-          console.warn(`Avaliador com e-mail ${record.evaluatorEmail} não encontrado para avaliação PEER. Pulando registro.`, record);
-          continue;
+          const data = { indicatorUserId: userId, indicatedUserId: indicatedId, cycleId: cycle.id, justification: record.justification };
+          
+          if(existingReference) {
+              await this.prisma.referenceIndication.update({ where: { id: existingReference.id }, data });
+          } else {
+              await this.prisma.referenceIndication.create({ data });
+          }
+          createdEvaluationCount++;
         }
-
-        await this.prisma.peerEvaluation.upsert({
-          where: {
-            evaluatedUserId_evaluatorUserId_cycleId_criterionId: {
-              evaluatedUserId: user.id,
-              evaluatorUserId: evaluatorUser.id,
-              cycleId: cycle.id,
-              criterionId: criterion.id,
-            },
-          },
-          update: {
-            score: record.score,
-            justification: record.justification,
-          },
-          create: {
-            evaluatedUserId: user.id,
-            evaluatorUserId: evaluatorUser.id,
-            cycleId: cycle.id,
-            criterionId: criterion.id,
-            score: record.score,
-            justification: record.justification,
-          },
-        });
-        createdEvaluationCount++;
+      } catch (error) {
+        console.error(`[ERRO] Falha ao importar registro para ${record.userEmail}:`, error);
       }
     }
+    return { message: `${createdEvaluationCount} registros de avaliação importados e ${createdUserCount} novos usuários criados com sucesso.` };
+  }
 
-    return {
-      message: `${createdEvaluationCount} registros de avaliação importados e ${createdUserCount} novos usuários criados com sucesso.`,
-    };
+  private async findOrCreateUser(email: string): Promise<{ id: string, wasCreated: boolean }> {
+    if (!email || typeof email !== 'string') {
+      throw new Error(`Email inválido fornecido para findOrCreateUser: ${email}`);
+    }
+    let user = await this.prisma.user.findUnique({ where: { email } });
+    if (user) {
+      return { id: user.id, wasCreated: false };
+    }
+    const initialPassword = randomBytes(8).toString('hex');
+    const passwordHash = await bcrypt.hash(initialPassword, 10);
+    user = await this.prisma.user.create({
+      data: { email, name: email.split('@')[0], userType: UserType.COLABORADOR, passwordHash },
+    });
+    await this.emailService.sendWelcomeEmail(user.email, initialPassword);
+    return { id: user.id, wasCreated: true };
   }
 }
