@@ -1,13 +1,20 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { UserType } from '@prisma/client';
 import { AppModule } from './app.module';
 import { UsersService } from './users/users.service';
-import { UserType } from '@prisma/client';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT || 3000;
+  app.enableCors({
+    origin: 'http://localhost:5173', 
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true, 
+  });
+
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   const config = new DocumentBuilder()
@@ -20,6 +27,8 @@ async function bootstrap() {
     .addTag('Criteria')
     .addTag('Cycles')
     .addTag('Evaluations')
+    .addTag('RH & Admin') 
+    .addTag('Importação') 
 
     .addSecurity('bearer', {
       type: 'http',
@@ -27,20 +36,21 @@ async function bootstrap() {
       bearerFormat: 'JWT',
       in: 'header',
     })
-  
     .addSecurityRequirements('bearer')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 
+
   const usersService = app.get(UsersService);
   const seedLogger = new Logger('AdminSeed');
 
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@rocketcorp.com';
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@rocketcorp.com'; 
   const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@1234';
 
   try {
+  
     const adminExists = await usersService.findByEmail(adminEmail);
     if (adminExists) {
       seedLogger.log('Usuário admin já existe. Nenhuma ação necessária.');
@@ -55,14 +65,13 @@ async function bootstrap() {
       });
       seedLogger.log('Usuário admin criado com sucesso!');
     }
-  } catch (error) {
+  } catch (error: any) { 
     if (error.code === 'P2021') {
         seedLogger.warn('Tabelas do banco de dados ainda não existem. Pule a criação do admin por agora. Execute as migrações.');
     } else {
-        seedLogger.error('Erro ao criar usuário admin:', error.stack);
+        seedLogger.error(`Erro ao criar usuário admin: ${error.message}`, error.stack); // Log mais detalhado
     }
   }
-
 
   await app.listen(port);
 
@@ -70,5 +79,15 @@ async function bootstrap() {
   const appUrl = await app.getUrl();
   logger.log(`🚀 Aplicação rodando em: ${appUrl}`);
   logger.log(`📚 Documentação Swagger disponível em: ${appUrl}/api-docs`);
+
+ 
+  const configService = app.get(ConfigService); 
+  const smtpHostCheck = configService.get<string>('SMTP_HOST');
+  const smtpPortCheck = configService.get<number>('SMTP_PORT');
+  const smtpSecureCheck = configService.get<boolean>('SMTP_SECURE');
+
+  logger.log(`[DEBUG SMTP] SMTP_HOST lido em main.ts: ${smtpHostCheck}`);
+  logger.log(`[DEBUG SMTP] SMTP_PORT lido em main.ts: ${smtpPortCheck}`);
+  logger.log(`[DEBUG SMTP] SMTP_SECURE lido em main.ts: ${smtpSecureCheck}`);
 }
 bootstrap();
