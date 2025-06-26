@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsString, IsUUID, Max, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class EvaluationItemDto {
   @ApiProperty({ description: 'ID do critério que está sendo avaliado' })
@@ -16,4 +16,9 @@ export class EvaluationItemDto {
   @IsString()
   @IsNotEmpty()
   justification: string;
+
+  @ApiPropertyOptional({ description: 'Descrição textual da nota (ex: "Supera as expectativas")' })
+  @IsString()
+  @IsOptional()
+  scoreDescription?: string;
 }
