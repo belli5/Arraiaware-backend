@@ -1,15 +1,38 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CriteriaService } from './criteria.service';
 import { AssociateCriterionDto } from './dto/associate-criterion.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
 import { UpdateCriterionDto } from './dto/update-criterion.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Criteria')
 @Controller('api/criteria')
 export class CriteriaController {
   constructor(private readonly criteriaService: CriteriaService) {}
 
+  @Patch('batch-update')
+  @UseInterceptors(FileInterceptor('file')) 
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Atualiza ou remove critérios em massa a partir de um arquivo XLSX' })
+  @ApiResponse({ status: 200, description: 'Critérios atualizados com sucesso.' })
+  @ApiBody({
+    description: 'Ficheiro XLSX com as colunas "Critério Antigo" e "Critério Novo"',
+    required: true,
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  batchUpdate(@UploadedFile() file: Express.Multer.File) {
+    return this.criteriaService.batchUpdateFromXlsx(file);
+  }
+  
   @Post()
   @ApiOperation({ summary: 'Criar um novo critério de avaliação' })
   create(@Body() createCriterionDto: CreateCriterionDto) {
