@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -152,6 +153,16 @@ export class UsersService {
     if (!isPasswordMatching) {
       throw new UnauthorizedException('A senha atual está incorreta.');
     }
+
+    const isSameAsOldPassword = await bcrypt.compare(
+      changePasswordDto.newPassword,
+      user.passwordHash,
+    );
+
+    if (isSameAsOldPassword) {
+      throw new BadRequestException('A nova senha não pode ser igual à senha atual.');
+    }
+    
 
     const saltOrRounds = 10;
     const newPasswordHash = await bcrypt.hash(changePasswordDto.newPassword, saltOrRounds);
