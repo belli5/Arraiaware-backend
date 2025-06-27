@@ -16,7 +16,6 @@ export class HistoryItemDto {
   @IsIn(['SELF', 'PEER', 'REFERENCE'])
   evaluationType: string;
 
-  // --- Campos de Identificação ---
   @ApiPropertyOptional({ description: 'Email do avaliador (para PEER)' })
   @IsEmail()
   @IsOptional()
@@ -27,7 +26,6 @@ export class HistoryItemDto {
   @IsOptional()
   indicatedEmail?: string;
 
-  // --- Campos para SELF ---
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
@@ -45,13 +43,11 @@ export class HistoryItemDto {
   @IsOptional()
   justification?: string;
   
-  // --- CAMPO CORRIGIDO E ADICIONADO ---
   @ApiPropertyOptional({ description: 'Descrição textual da nota (para SELF)' })
   @IsString()
   @IsOptional()
   scoreDescription?: string;
 
-  // --- Campos para PEER (Avaliação 360) ---
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()

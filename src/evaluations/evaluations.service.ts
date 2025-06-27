@@ -17,7 +17,7 @@ export class EvaluationsService {
       criterionId: ev.criterionId,
       score: ev.score,
       justification: ev.justification,
-      scoreDescription: ev.scoreDescription, // Campo novo
+      scoreDescription: ev.scoreDescription, 
     }));
 
     return this.prisma.$transaction(
