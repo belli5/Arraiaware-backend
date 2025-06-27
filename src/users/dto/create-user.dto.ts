@@ -1,6 +1,6 @@
 import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { UserType } from '@prisma/client';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -18,17 +18,17 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
-  @ApiProperty({
-    description: 'Senha do usuário (mínimo de 8 caracteres)',
+  @ApiPropertyOptional({
+    description: 'Senha do usuário (mínimo de 8 caracteres). Se não for fornecida, uma senha aleatória será gerada e enviada por e-mail.',
     example: 'S3nh@F0rt3!',
   })
   @IsString()
-  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' })
-  password: string;
+  @IsOptional()
+  password?: string;
 
   @ApiProperty({
     description: 'Tipo do usuário no sistema',
-    enum: UserType, 
+    enum: UserType,
     example: UserType.COLABORADOR,
   })
   @IsEnum(UserType)
@@ -41,13 +41,12 @@ export class CreateUserDto {
   })
   @IsString()
   @IsOptional()
-  unidade?: string; 
-  
+  unidade?: string;
+
   @ApiHideProperty()
   @IsUUID()
   @IsOptional()
   roleId?: string;
-
 
   @ApiHideProperty()
   @IsUUID()
