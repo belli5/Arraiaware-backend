@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -129,7 +129,6 @@ export class RhService {
     return { data, pagination: { totalItems, totalPages, currentPage: page } };
   }
 
-  // --- FUNÇÃO REINSERIDA ---
   async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
     if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo enviado.');
@@ -219,7 +218,6 @@ export class RhService {
   }
 
   async importHistoryFromMultipleXlsx(files: Array<Express.Multer.File>) {
-    // ... Esta função permanece a mesma e está correta
     if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
@@ -318,6 +316,7 @@ export class RhService {
   async importHistory(importData: ImportHistoryDto) {
     let createdEvaluationCount = 0;
     let createdUserCount = 0;
+    const errors = [];
 
     for (const record of importData.records) {
       if (!record.userEmail || !record.cycleName || !record.evaluationType) {
@@ -335,59 +334,70 @@ export class RhService {
       });
 
       try {
-        if (record.evaluationType === 'SELF' && record.criterionName && record.score) {
+        if (record.evaluationType === 'SELF' && record.criterionName) {
           const criterion = await this.prisma.evaluationCriterion.upsert({
             where: { criterionName: record.criterionName },
             update: {},
             create: { criterionName: record.criterionName, pillar: "Comportamento", description: "Critério importado automaticamente." },
           });
 
-          const data = { userId, cycleId: cycle.id, criterionId: criterion.id, score: record.score, justification: record.justification, scoreDescription: record.scoreDescription, submissionStatus: 'Concluído' };
-          await this.prisma.selfEvaluation.upsert({
-            where: { userId_cycleId_criterionId: { userId, cycleId: cycle.id, criterionId: criterion.id } },
-            update: data,
-            create: data,
-          });
+          const scoreAsNumber = parseInt(String(record.score), 10);
+          const finalScore = isNaN(scoreAsNumber) ? 0 : scoreAsNumber;
+
+          const finalJustification = record.justification || 'Não aplicável';
+          const finalScoreDescription = record.scoreDescription || (finalScore === 0 ? 'Não se Aplica' : '');
+
+          const data = {
+            userId,
+            cycleId: cycle.id,
+            criterionId: criterion.id,
+            score: finalScore,
+            justification: finalJustification,
+            scoreDescription: finalScoreDescription,
+            submissionStatus: 'Concluído'
+          };
+
+          await this.prisma.selfEvaluation.create({ data });
           createdEvaluationCount++;
 
         } else if (record.evaluationType === 'PEER' && record.evaluatorEmail && record.generalScore) {
           const { id: evaluatorId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(record.evaluatorEmail);
           if (evaluatorWasCreated) createdUserCount++;
 
-          const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
-            where: { evaluatedUserId: userId, evaluatorUserId: evaluatorId, cycleId: cycle.id }
-          });
-          
           const data = { evaluatedUserId: userId, evaluatorUserId: evaluatorId, cycleId: cycle.id, project: record.project, motivatedToWorkAgain: record.motivatedToWorkAgain, generalScore: record.generalScore, pointsToImprove: record.pointsToImprove, pointsToExplore: record.pointsToExplore };
-          
-          if(existingPeerEval){
-              await this.prisma.peerEvaluation.update({ where: { id: existingPeerEval.id }, data });
-          } else {
-              await this.prisma.peerEvaluation.create({ data });
-          }
+
+          await this.prisma.peerEvaluation.create({ data });
           createdEvaluationCount++;
 
         } else if (record.evaluationType === 'REFERENCE' && record.indicatedEmail && record.justification) {
           const { id: indicatedId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(record.indicatedEmail);
           if (indicatedWasCreated) createdUserCount++;
 
-          const existingReference = await this.prisma.referenceIndication.findFirst({
-              where: { indicatorUserId: userId, indicatedUserId: indicatedId, cycleId: cycle.id }
-          });
-
           const data = { indicatorUserId: userId, indicatedUserId: indicatedId, cycleId: cycle.id, justification: record.justification };
-          
-          if(existingReference) {
-              await this.prisma.referenceIndication.update({ where: { id: existingReference.id }, data });
-          } else {
-              await this.prisma.referenceIndication.create({ data });
-          }
+
+          await this.prisma.referenceIndication.create({ data });
           createdEvaluationCount++;
         }
       } catch (error) {
-        console.error(`[ERRO] Falha ao importar registro para ${record.userEmail}:`, error);
+        if (error.code === 'P2002') { 
+          const message = `Registro duplicado encontrado para ${record.userEmail} no ciclo ${record.cycleName}.`;
+          console.error(`[ERRO] ${message}`, error);
+          errors.push(message);
+        } else {
+          const message = `Falha ao importar registro para ${record.userEmail}: ${error.message}`;
+          console.error(`[ERRO] ${message}`, error);
+          errors.push(message);
+        }
       }
     }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: 'Ocorreram erros durante a importação. Verifique os logs do console para mais detalhes.',
+        errors,
+      });
+    }
+
     return { message: `${createdEvaluationCount} registros de avaliação importados e ${createdUserCount} novos usuários criados com sucesso.` };
   }
 
@@ -404,7 +414,13 @@ export class RhService {
     user = await this.prisma.user.create({
       data: { email, name: email.split('@')[0], userType: UserType.COLABORADOR, passwordHash },
     });
-    await this.emailService.sendWelcomeEmail(user.email, initialPassword);
+    
+    try {
+        await this.emailService.sendWelcomeEmail(user.email, initialPassword);
+    } catch (emailError) {
+        console.error(`[AVISO] Falha ao enviar e-mail de boas-vindas para ${user.email}, mas o usuário foi criado. Erro: ${emailError.message}`);
+    }
+    
     return { id: user.id, wasCreated: true };
   }
 }
