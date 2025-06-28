@@ -13,7 +13,11 @@ class CriterionDto {
   @ApiProperty()
   description: string;
 }
+
 export class TrilhaResponseDto {
+  @ApiProperty({ description: 'ID da trilha' })
+  id: string;
+
   @ApiProperty({ description: 'Nome da trilha' })
   nome_da_trilha: string;
 
