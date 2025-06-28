@@ -115,3 +115,11 @@ enum UserType {
   ADMIN
   RH
 }
+model ImportHistory {
+  id          String   @id @default(cuid())
+  fileName    String
+  importDate  DateTime @default(now())
+  status      String
+  file        Bytes
+}
+
