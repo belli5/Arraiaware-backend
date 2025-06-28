@@ -2,7 +2,6 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-// import { UserType } from '@prisma/client';
 import { AppModule } from './app.module';
 import { UsersService } from './users/users.service';
 
@@ -69,7 +68,7 @@ async function bootstrap() {
     if (error.code === 'P2021') {
         seedLogger.warn('Tabelas do banco de dados ainda não existem. Pule a criação do admin por agora. Execute as migrações.');
     } else {
-        seedLogger.error(`Erro ao criar usuário admin: ${error.message}`, error.stack); // Log mais detalhado
+        seedLogger.error(`Erro ao criar usuário admin: ${error.message}`, error.stack);
     }
   }
 

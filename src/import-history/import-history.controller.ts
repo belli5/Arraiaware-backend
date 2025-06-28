@@ -22,7 +22,6 @@ export class ImportHistoryController {
   @ApiOperation({ summary: 'Baixar um arquivo do histórico de importação' })
   @ApiResponse({ status: 200, description: 'Download iniciado.' })
   @ApiResponse({ status: 404, description: 'Arquivo não encontrado.' })
-  // Removido o ParseUUIDPipe para aceitar o formato CUID do Prisma
   async downloadFile(@Param('id') id: string, @Res() res: Response) {
     this.logger.log(`Requisição de download para o ID: ${id}`);
     try {

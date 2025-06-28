@@ -158,6 +158,28 @@ export class CriteriaService {
   }
   
   private async mergeCriteria(oldId: string, newId: string) {
+    const oldSelfEvaluations = await this.prisma.selfEvaluation.findMany({
+      where: { criterionId: oldId },
+    });
+
+    for (const oldEval of oldSelfEvaluations) {
+      const existingNewEval = await this.prisma.selfEvaluation.findUnique({
+        where: {
+          userId_cycleId_criterionId: {
+            userId: oldEval.userId,
+            cycleId: oldEval.cycleId,
+            criterionId: newId,
+          },
+        },
+      });
+
+      if (existingNewEval) {
+        await this.prisma.selfEvaluation.delete({
+          where: { id: oldEval.id },
+        });
+      }
+    }
+
     await this.prisma.selfEvaluation.updateMany({
         where: { criterionId: oldId },
         data: { criterionId: newId },

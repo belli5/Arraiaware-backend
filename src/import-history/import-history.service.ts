@@ -1,11 +1,8 @@
-// Em: src/import-history/import-history.service.ts
-
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ImportHistoryService {
-  // Adiciona um Logger para esta classe, que aparecerá no console com o prefixo [ImportHistoryService]
   private readonly logger = new Logger(ImportHistoryService.name);
 
   constructor(private prisma: PrismaService) {}
