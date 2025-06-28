@@ -1,10 +1,10 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CriteriaService } from './criteria.service';
 import { AssociateCriterionDto } from './dto/associate-criterion.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
 import { UpdateCriterionDto } from './dto/update-criterion.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Criteria')
 @Controller('api/criteria')
