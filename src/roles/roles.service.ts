@@ -53,6 +53,7 @@ export class RolesService {
     });
 
     return roles.map((role) => ({
+      id: role.id, 
       nome_da_trilha: role.name,
       criterios: role.criteria.map((rc) => rc.criterion),
     }));
