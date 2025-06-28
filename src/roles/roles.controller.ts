@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { TrilhaResponseDto } from './dto/trilha-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RolesService } from './roles.service';
 
@@ -20,6 +21,13 @@ export class RolesController {
   @ApiOperation({ summary: 'Listar todos os cargos/trilhas' })
   findAll() {
     return this.rolesService.findAll();
+  }
+
+  @Get('trilhas')
+  @ApiOperation({ summary: 'Listar todas as trilhas com seus critérios' })
+  @ApiResponse({ status: 200, description: 'Lista de trilhas retornada com sucesso.', type: [TrilhaResponseDto] })
+  findAllTrilhas() {
+    return this.rolesService.findTrilhasWithCriteria();
   }
 
   @Get(':id')
