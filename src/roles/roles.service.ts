@@ -26,7 +26,7 @@ export class RolesService {
   }
 
   async update(id: string, updateRoleDto: UpdateRoleDto) {
-    await this.findOne(id); 
+    await this.findOne(id);
     return this.prisma.role.update({
       where: { id },
       data: updateRoleDto,
@@ -34,7 +34,27 @@ export class RolesService {
   }
 
   async remove(id: string) {
-    await this.findOne(id); 
+    await this.findOne(id);
     return this.prisma.role.delete({ where: { id } });
+  }
+
+  async findTrilhasWithCriteria() {
+    const roles = await this.prisma.role.findMany({
+      where: {
+        type: 'TRILHA',
+      },
+      include: {
+        criteria: {
+          include: {
+            criterion: true,
+          },
+        },
+      },
+    });
+
+    return roles.map((role) => ({
+      nome_da_trilha: role.name,
+      criterios: role.criteria.map((rc) => rc.criterion),
+    }));
   }
 }
