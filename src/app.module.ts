@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CriteriaModule } from './criteria/criteria.module';
 import { CyclesModule } from './cycles/cycles.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
+import { ImportHistoryModule } from './import-history/import-history.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
@@ -26,11 +27,11 @@ import { UsersModule } from './users/users.module';
     CyclesModule,
     EvaluationsModule,
     RhModule,
+    ImportHistoryModule, 
   ],
   controllers: [AppController],
   providers: [
     AppService,
-  
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
