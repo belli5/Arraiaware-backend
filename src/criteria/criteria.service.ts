@@ -29,6 +29,7 @@ export class CriteriaService {
     'Evolução da Rocket Corp': 'Gestão e Liderança',
   };
 
+
   constructor(private prisma: PrismaService) {}
 
   async batchUpdateFromXlsx(file: Express.Multer.File) {
@@ -153,17 +154,52 @@ export class CriteriaService {
 
     return false;
   }
-  
+
   private async mergeCriteria(oldId: string, newId: string) {
-    await this.prisma.selfEvaluation.updateMany({
+
+    const oldSelfEvaluations = await this.prisma.selfEvaluation.findMany({
       where: { criterionId: oldId },
-      data: { criterionId: newId },
     });
+
+    const evaluationsToDelete = [];
+    const evaluationsToUpdate = [];
+
+    for (const oldEval of oldSelfEvaluations) {
+      const existingNewEval = await this.prisma.selfEvaluation.findUnique({
+        where: {
+          userId_cycleId_criterionId: {
+            userId: oldEval.userId,
+            cycleId: oldEval.cycleId,
+            criterionId: newId,
+          },
+        },
+      });
+
+      if (existingNewEval) {
+        evaluationsToDelete.push(oldEval.id);
+      } else {
+        evaluationsToUpdate.push(oldEval.id);
+      }
+    }
+    
+    if (evaluationsToDelete.length > 0) {
+      await this.prisma.selfEvaluation.deleteMany({
+        where: { id: { in: evaluationsToDelete } },
+      });
+    }
+
+    if (evaluationsToUpdate.length > 0) {
+      await this.prisma.selfEvaluation.updateMany({
+        where: { id: { in: evaluationsToUpdate } },
+        data: { criterionId: newId },
+      });
+    }
+
 
     const oldRoleAssociations = await this.prisma.roleCriteria.findMany({ where: { criterionId: oldId } });
     for (const assoc of oldRoleAssociations) {
-        const existingNewAssoc = await this.prisma.roleCriteria.findFirst({
-            where: { roleId: assoc.roleId, criterionId: newId }
+        const existingNewAssoc = await this.prisma.roleCriteria.findUnique({
+            where: { roleId_criterionId: { roleId: assoc.roleId, criterionId: newId } }
         });
         if (!existingNewAssoc) {
             await this.prisma.roleCriteria.create({
