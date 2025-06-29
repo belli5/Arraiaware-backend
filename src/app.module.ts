@@ -13,6 +13,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { UsersModule } from './users/users.module';
     CyclesModule,
     EvaluationsModule,
     RhModule,
-    ImportHistoryModule, 
+    ImportHistoryModule,
+    ProjectsModule, 
   ],
   controllers: [AppController],
   providers: [
