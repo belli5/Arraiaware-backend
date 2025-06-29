@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssociateCriterionDto } from './dto/associate-criterion.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
+import { DisassociateCriterionDto } from './dto/disassociate-criterion.dto';
 import { UpdateCriterionDto } from './dto/update-criterion.dto';
 import { CriterionInUseException } from './exceptions/criterion-in-use.exception';
 import { CriterionNameConflictException } from './exceptions/criterion-name-conflict.exception';
@@ -13,7 +14,6 @@ import { RoleForAssociationNotFoundException } from './exceptions/role-for-assoc
 export class CriteriaService {
   private readonly logger = new Logger(CriteriaService.name);
 
-  
   private readonly CRITERIA_PILLAR_MAP = {
     'Sentimento de Dono': 'Comportamento',
     'Resiliencia nas adversidades': 'Comportamento',
@@ -63,7 +63,6 @@ export class CriteriaService {
       if (oldName && mergeMap[oldName]) {
         newName = mergeMap[oldName];
       }
-
       
       const correctPillar = this.CRITERIA_PILLAR_MAP[newName || oldName];
       
@@ -96,13 +95,12 @@ export class CriteriaService {
       }
 
       if (!newName || newName.trim() === '') {
-        
         if (oldCriterion.pillar !== correctPillar) {
-            await this.prisma.evaluationCriterion.update({
-                where: { id: oldCriterion.id },
-                data: { pillar: correctPillar }
-            });
-            pillarsCorrectedCount++;
+          await this.prisma.evaluationCriterion.update({
+            where: { id: oldCriterion.id },
+            data: { pillar: correctPillar },
+          });
+          pillarsCorrectedCount++;
         }
         continue;
       }
@@ -126,13 +124,12 @@ export class CriteriaService {
         await this.mergeCriteria(oldCriterion.id, newCriterionTarget.id);
         mergedCount++;
         
-      
         if (newCriterionTarget.pillar !== correctPillar) {
-             await this.prisma.evaluationCriterion.update({
-                where: { id: newCriterionTarget.id },
-                data: { pillar: correctPillar }
-            });
-            pillarsCorrectedCount++;
+           await this.prisma.evaluationCriterion.update({
+              where: { id: newCriterionTarget.id },
+              data: { pillar: correctPillar }
+          });
+          pillarsCorrectedCount++;
         }
       }
     }
@@ -158,31 +155,9 @@ export class CriteriaService {
   }
   
   private async mergeCriteria(oldId: string, newId: string) {
-    const oldSelfEvaluations = await this.prisma.selfEvaluation.findMany({
-      where: { criterionId: oldId },
-    });
-
-    for (const oldEval of oldSelfEvaluations) {
-      const existingNewEval = await this.prisma.selfEvaluation.findUnique({
-        where: {
-          userId_cycleId_criterionId: {
-            userId: oldEval.userId,
-            cycleId: oldEval.cycleId,
-            criterionId: newId,
-          },
-        },
-      });
-
-      if (existingNewEval) {
-        await this.prisma.selfEvaluation.delete({
-          where: { id: oldEval.id },
-        });
-      }
-    }
-
     await this.prisma.selfEvaluation.updateMany({
-        where: { criterionId: oldId },
-        data: { criterionId: newId },
+      where: { criterionId: oldId },
+      data: { criterionId: newId },
     });
 
     const oldRoleAssociations = await this.prisma.roleCriteria.findMany({ where: { criterionId: oldId } });
@@ -256,6 +231,34 @@ export class CriteriaService {
       data: {
         criterionId,
         roleId,
+      },
+    });
+  }
+
+  async disassociateFromRole(criterionId: string, disassociateDto: DisassociateCriterionDto) {
+    const { roleId } = disassociateDto;
+  
+    const association = await this.prisma.roleCriteria.findUnique({
+      where: {
+        roleId_criterionId: {
+          roleId: roleId,
+          criterionId: criterionId,
+        },
+      },
+    });
+  
+    if (!association) {
+      throw new NotFoundException(
+        `Não foi encontrada uma associação entre o critério ID ${criterionId} e o cargo ID ${roleId}.`,
+      );
+    }
+  
+    return this.prisma.roleCriteria.delete({
+      where: {
+        roleId_criterionId: {
+          roleId: roleId,
+          criterionId: criterionId,
+        },
       },
     });
   }
