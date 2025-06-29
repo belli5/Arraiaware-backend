@@ -21,7 +21,7 @@ export class RhService {
   async getGlobalStatus(cycleId: string) {
     const users = await this.prisma.user.findMany({
       where: { isActive: true },
-      select: { id: true, name: true, role: { select: { name: true } } },
+      select: { id: true, name: true, roles: { select: { name: true } } },
     });
     const selfEvaluations = await this.prisma.selfEvaluation.findMany({
       where: { cycleId },
@@ -32,7 +32,7 @@ export class RhService {
     return users.map((user) => ({
       userId: user.id,
       name: user.name,
-      role: user.role?.name || 'Sem cargo',
+      role: user.roles.map(r => r.name).join(', ') || 'Sem cargo',
       status: completedUsers.has(user.id) ? 'Concluído' : 'Pendente',
     }));
   }
@@ -51,8 +51,8 @@ export class RhService {
     if (!currentCycle) throw new NotFoundException('Nenhum ciclo de avaliação encontrado.');
     const where: Prisma.UserWhereInput = { isActive: true };
     const filterConditions: Prisma.UserWhereInput[] = [];
-    if (department) filterConditions.push({ role: { type: { equals: department } } });
-    if (search) filterConditions.push({ OR: [{ name: { contains: search } }, { role: { name: { contains: search } } }] });
+    if (department) filterConditions.push({ roles: { some: { type: { equals: department } } } });
+    if (search) filterConditions.push({ OR: [{ name: { contains: search } }, { roles: { some: { name: { contains: search } } } }] });
     if (filterConditions.length > 0) where.AND = filterConditions;
     const completedUserIds = (await this.prisma.selfEvaluation.findMany({ where: { cycleId: currentCycle.id }, distinct: ['userId'], select: { userId: true } })).map((ev) => ev.userId);
     const isOverdue = new Date() > new Date(currentCycle.endDate);
@@ -64,14 +64,20 @@ export class RhService {
     }
     const [totalItems, users] = await this.prisma.$transaction([
       this.prisma.user.count({ where }),
-      this.prisma.user.findMany({ where, skip, take: limit, include: { role: true } }),
+      this.prisma.user.findMany({ where, skip, take: limit, include: { roles: true } }),
     ]);
     const data = users.map((user) => {
       const userStatus = completedUserIds.includes(user.id) ? 'Concluída' : isOverdue ? 'Em Atraso' : 'Pendente';
-      return { id: user.id, collaborator: user.name, department: user.role?.name || 'N/A', track: user.role?.name || 'N/A', status: userStatus, progress: userStatus === 'Concluída' ? 100 : 0, deadline: currentCycle.endDate, completedAt: null };
+      const primaryRoleName = user.roles[0]?.name || 'N/A';
+      return { id: user.id, collaborator: user.name, department: primaryRoleName, track: primaryRoleName, status: userStatus, progress: userStatus === 'Concluída' ? 100 : 0, deadline: currentCycle.endDate, completedAt: null };
     });
     const totalPages = Math.ceil(totalItems / limit);
-    return { data, pagination: { totalItems, totalPages, currentPage: page } };
+    return { 
+      cycleId: currentCycle.id,
+      cycleName: currentCycle.name,
+      data, 
+      pagination: { totalItems, totalPages, currentPage: page } 
+    };
   }
 
   async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
