@@ -9,7 +9,6 @@ export class ProjectsService {
   async create(createProjectDto: CreateProjectDto) {
     const { name, cycleId, managerId, collaboratorIds } = createProjectDto;
 
-    // Opcional: Verificar se o ciclo e os usuários existem antes de criar
     const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
     if (!cycle) {
       throw new NotFoundException(`Ciclo com ID ${cycleId} não encontrado.`);
