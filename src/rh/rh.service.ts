@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, UserType } from '@prisma/client';
+import { EvaluationCycle, Prisma, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import * as XLSX from 'xlsx';
@@ -45,39 +45,123 @@ export class RhService {
   }
   
   async findPaginatedEvaluations(queryDto: GetEvaluationsQueryDto) {
-    const { page, limit, search, status, department } = queryDto;
-    const skip = (page - 1) * limit;
-    const currentCycle = await this.prisma.evaluationCycle.findFirst({ orderBy: { startDate: 'desc' } });
-    if (!currentCycle) throw new NotFoundException('Nenhum ciclo de avaliação encontrado.');
+    const { page, limit, cycleId } = queryDto;
+
+    const cycles = await this._getTargetCycles(cycleId);
+    if (cycles.length === 0) {
+      return [];
+    }
+    
+    const resultsByCycle = [];
+
+    for (const cycle of cycles) {
+      const completedUserIds = (await this.prisma.selfEvaluation.findMany({
+        where: { cycleId: cycle.id },
+        distinct: ['userId'],
+        select: { userId: true },
+      })).map((ev) => ev.userId);
+
+      const where = this._buildUserWhereClause(queryDto, completedUserIds, cycle);
+
+      const [totalItems, users] = await this.prisma.$transaction([
+        this.prisma.user.count({ where }),
+        this.prisma.user.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          include: { roles: true },
+        }),
+      ]);
+
+      const data = users.map((user) => {
+        const isOverdue = new Date() > new Date(cycle.endDate);
+        const userStatus = completedUserIds.includes(user.id) ? 'Concluída' : isOverdue ? 'Em Atraso' : 'Pendente';
+        
+        const departmentRole = user.roles.find(r => r.type === 'CARGO');
+        const trackRole = user.roles.find(r => r.type === 'TRILHA');
+
+        return {
+          id: user.id,
+          collaborator: user.name,
+          department: departmentRole?.name || 'N/A',
+          track: trackRole?.name || 'N/A',
+          status: userStatus,
+          progress: userStatus === 'Concluída' ? 100 : 0,
+          deadline: cycle.endDate,
+          completedAt: null,
+        };
+      });
+      
+      const totalPages = Math.ceil(totalItems / limit);
+      resultsByCycle.push({
+        cycleId: cycle.id,
+        cycleName: cycle.name,
+        data,
+        pagination: { totalItems, totalPages, currentPage: page },
+      });
+    }
+
+    return resultsByCycle;
+  }
+
+  private async _getTargetCycles(cycleId?: string): Promise<EvaluationCycle[]> {
+    if (cycleId) {
+      const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
+      if (!cycle) {
+        throw new NotFoundException(`Ciclo de avaliação com ID ${cycleId} não encontrado.`);
+      }
+      return [cycle];
+    }
+    
+    const cycles = await this.prisma.evaluationCycle.findMany({ orderBy: { startDate: 'desc' } });
+    
+    if (!cycles || cycles.length === 0) {
+      throw new NotFoundException('Nenhum ciclo de avaliação encontrado.');
+    }
+    
+    return cycles;
+  }
+  
+  private _buildUserWhereClause(
+    queryDto: GetEvaluationsQueryDto,
+    completedUserIds: string[],
+    targetCycle: EvaluationCycle,
+  ): Prisma.UserWhereInput {
+    const { search, status, department, track } = queryDto; 
     const where: Prisma.UserWhereInput = { isActive: true };
     const filterConditions: Prisma.UserWhereInput[] = [];
-    if (department) filterConditions.push({ roles: { some: { type: { equals: department } } } });
-    if (search) filterConditions.push({ OR: [{ name: { contains: search } }, { roles: { some: { name: { contains: search } } } }] });
-    if (filterConditions.length > 0) where.AND = filterConditions;
-    const completedUserIds = (await this.prisma.selfEvaluation.findMany({ where: { cycleId: currentCycle.id }, distinct: ['userId'], select: { userId: true } })).map((ev) => ev.userId);
-    const isOverdue = new Date() > new Date(currentCycle.endDate);
-    if (status === 'Concluída') where.id = { in: completedUserIds };
-    else if (status === 'Pendente') where.id = { notIn: completedUserIds };
-    else if (status === 'Em Atraso') {
-      if (!isOverdue) return { data: [], pagination: { totalItems: 0, totalPages: 0, currentPage: page } };
-      where.id = { notIn: completedUserIds };
+
+    if (department) {
+      filterConditions.push({ roles: { some: { name: { contains: department }, type: 'CARGO' } } });
     }
-    const [totalItems, users] = await this.prisma.$transaction([
-      this.prisma.user.count({ where }),
-      this.prisma.user.findMany({ where, skip, take: limit, include: { roles: true } }),
-    ]);
-    const data = users.map((user) => {
-      const userStatus = completedUserIds.includes(user.id) ? 'Concluída' : isOverdue ? 'Em Atraso' : 'Pendente';
-      const primaryRoleName = user.roles[0]?.name || 'N/A';
-      return { id: user.id, collaborator: user.name, department: primaryRoleName, track: primaryRoleName, status: userStatus, progress: userStatus === 'Concluída' ? 100 : 0, deadline: currentCycle.endDate, completedAt: null };
-    });
-    const totalPages = Math.ceil(totalItems / limit);
-    return { 
-      cycleId: currentCycle.id,
-      cycleName: currentCycle.name,
-      data, 
-      pagination: { totalItems, totalPages, currentPage: page } 
-    };
+
+    if (track) {
+      filterConditions.push({ roles: { some: { name: { contains: track }, type: 'TRILHA' } } });
+    }
+    
+    if (search) {
+      filterConditions.push({ name: { contains: search } });
+    }
+    
+    if (filterConditions.length > 0) {
+      where.AND = filterConditions;
+    }
+    
+    const isOverdue = new Date() > new Date(targetCycle.endDate);
+
+    if (status === 'Concluída') {
+      where.id = { in: completedUserIds };
+    } else if (status === 'Pendente') {
+      where.id = { notIn: completedUserIds };
+    } else if (status === 'Em Atraso') {
+      if (isOverdue) {
+        where.id = { notIn: completedUserIds };
+      } else {
+        where.id = { in: [] };
+      }
+    }
+
+    return where;
   }
 
   async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
