@@ -15,10 +15,10 @@ export class SubmitPeerEvaluationDto {
   @IsUUID()
   cycleId: string;
 
-  @ApiPropertyOptional({ description: 'Projeto em que atuaram juntos' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'ID do projeto em que atuaram juntos (se aplicável)' })
+  @IsUUID()
   @IsOptional()
-  project?: string;
+  projectId?: string;
 
   @ApiPropertyOptional({ description: 'Feedback sobre a motivação para trabalhar novamente com o colaborador' })
   @IsString()
