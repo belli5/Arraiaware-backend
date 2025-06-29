@@ -1,6 +1,6 @@
 import { ApiHideProperty, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -43,10 +43,11 @@ export class CreateUserDto {
   @IsOptional()
   unidade?: string;
 
-  @ApiHideProperty()
-  @IsUUID()
+  @ApiProperty({ description: 'Lista de IDs de Cargos/Trilhas do usuário' })
+  @IsArray()
+  @IsUUID('all', { each: true })
   @IsOptional()
-  roleId?: string;
+  roleIds?: string[];
 
   @ApiHideProperty()
   @IsUUID()
