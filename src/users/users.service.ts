@@ -21,7 +21,7 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { email, name, userType, unidade, roleId, leaderId } = createUserDto;
+    const { email, name, userType, unidade, roleIds, leaderId } = createUserDto;
     let password = createUserDto.password;
     let passwordToSend: string | null = null;
 
@@ -49,8 +49,10 @@ export class UsersService {
         passwordHash,
         userType,
         unidade,
-        roleId,
         leaderId,
+        roles: {
+          connect: roleIds?.map(id => ({ id })),
+        },
       },
     });
 
@@ -85,7 +87,7 @@ export class UsersService {
   async findAll() {
     const users = await this.prisma.user.findMany({
       include: {
-        role: true,
+        roles: true,
         leader: true,
       },
     });
@@ -98,7 +100,7 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { role: true, leader: true },
+      include: { roles: true, leader: true },
     });
 
     if (!user) {
@@ -111,10 +113,18 @@ export class UsersService {
 
   async update(id: string, updateUserDto: UpdateUserDto) {
     await this.findOne(id);
-    
+    const { roleIds, ...otherData } = updateUserDto;
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: updateUserDto,
+      data: {
+        ...otherData,
+        ...(roleIds && {
+          roles: {
+            set: roleIds.map(id => ({ id })),
+          },
+        }),
+      },
     });
 
     const { passwordHash: _, ...result } = updatedUser;
@@ -131,7 +141,7 @@ export class UsersService {
     return this.prisma.user.findUnique({
       where: { email },
       include: {
-        role: true,
+        roles: true,
       },
     });
   }
@@ -163,7 +173,6 @@ export class UsersService {
       throw new BadRequestException('A nova senha não pode ser igual à senha atual.');
     }
     
-
     const saltOrRounds = 10;
     const newPasswordHash = await bcrypt.hash(changePasswordDto.newPassword, saltOrRounds);
 
