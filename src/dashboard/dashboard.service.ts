@@ -105,7 +105,7 @@ export class DashboardService {
     });
 
     const totalCollaborators = collaboratorMap.size;
-    const completedCount = evaluationItems.filter(item => item.status === 'Concluído').length;
+    const completedCount = evaluationItems.filter(item => item.status === 'Concluída').length;
     const pendingCount = evaluationItems.filter(item => item.status === 'Pendente').length;
     const overdueCount = evaluationItems.filter(item => item.status === 'Em Atraso').length;
     
