@@ -45,65 +45,85 @@ export class RhService {
   }
   
   async findPaginatedEvaluations(queryDto: GetEvaluationsQueryDto) {
-    const { page, limit, cycleId } = queryDto;
+    const { page, limit, cycleId, search, status, department, track } = queryDto;
 
-    const cycles = await this._getTargetCycles(cycleId);
-    if (cycles.length === 0) {
-      return [];
+    const targetCycles = await this._getTargetCycles(cycleId);
+    if (targetCycles.length === 0) {
+      return {
+        data: [],
+        pagination: { totalItems: 0, totalPages: 0, currentPage: page },
+      };
     }
     
-    const resultsByCycle = [];
+    const allUsers = await this.prisma.user.findMany({
+      where: { isActive: true },
+      include: { roles: true },
+    });
 
-    for (const cycle of cycles) {
-      const completedUserIds = (await this.prisma.selfEvaluation.findMany({
-        where: { cycleId: cycle.id },
-        distinct: ['userId'],
-        select: { userId: true },
-      })).map((ev) => ev.userId);
+    const completedEvaluations = await this.prisma.selfEvaluation.findMany({
+        where: { cycleId: { in: targetCycles.map(c => c.id) } },
+        distinct: ['userId', 'cycleId'],
+        select: { userId: true, cycleId: true },
+    });
+    
+    const completedSet = new Set(completedEvaluations.map(ev => `${ev.userId}-${ev.cycleId}`));
 
-      const where = this._buildUserWhereClause(queryDto, completedUserIds, cycle);
+    let allPossibleEvaluations = [];
 
-      const [totalItems, users] = await this.prisma.$transaction([
-        this.prisma.user.count({ where }),
-        this.prisma.user.findMany({
-          where,
-          skip: (page - 1) * limit,
-          take: limit,
-          include: { roles: true },
-        }),
-      ]);
-
-      const data = users.map((user) => {
-        const isOverdue = new Date() > new Date(cycle.endDate);
-        const userStatus = completedUserIds.includes(user.id) ? 'Concluída' : isOverdue ? 'Em Atraso' : 'Pendente';
-        
+    for (const cycle of targetCycles) {
+      for (const user of allUsers) {
         const departmentRole = user.roles.find(r => r.type === 'CARGO');
         const trackRole = user.roles.find(r => r.type === 'TRILHA');
+        
+        const isCompleted = completedSet.has(`${user.id}-${cycle.id}`);
+        const isOverdue = new Date() > new Date(cycle.endDate);
+        
+        let userStatus: string;
+        if (isCompleted) {
+            userStatus = 'Concluída';
+        } else if (isOverdue) {
+            userStatus = 'Em Atraso';
+        } else {
+            userStatus = 'Pendente';
+        }
 
-        return {
-          id: user.id,
+        allPossibleEvaluations.push({
+          id: `${user.id}-${cycle.id}`,
           collaborator: user.name,
           department: departmentRole?.name || 'N/A',
           track: trackRole?.name || 'N/A',
           status: userStatus,
-          progress: userStatus === 'Concluída' ? 100 : 0,
+          progress: isCompleted ? 100 : 0,
           deadline: cycle.endDate,
-          completedAt: null,
-        };
-      });
-      
-      const totalPages = Math.ceil(totalItems / limit);
-      resultsByCycle.push({
-        cycleId: cycle.id,
-        cycleName: cycle.name,
-        data,
-        pagination: { totalItems, totalPages, currentPage: page },
-      });
+          completedAt: null, 
+          cycleId: cycle.id,
+          cycleName: cycle.name,
+        });
+      }
     }
 
-    return resultsByCycle;
-  }
+    const filteredEvaluations = allPossibleEvaluations.filter(ev => {
+        const searchMatch = !search || ev.collaborator.toLowerCase().includes(search.toLowerCase());
+        const statusMatch = !status || ev.status === status;
+        const departmentMatch = !department || ev.department.toLowerCase().includes(department.toLowerCase());
+        const trackMatch = !track || ev.track.toLowerCase().includes(track.toLowerCase());
+        return searchMatch && statusMatch && departmentMatch && trackMatch;
+    });
 
+    const totalItems = filteredEvaluations.length;
+    const totalPages = Math.ceil(totalItems / limit);
+    const paginatedData = filteredEvaluations.slice((page - 1) * limit, page * limit);
+
+    return {
+      data: paginatedData,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+      },
+    };
+  }
+  
   private async _getTargetCycles(cycleId?: string): Promise<EvaluationCycle[]> {
     if (cycleId) {
       const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
@@ -116,7 +136,7 @@ export class RhService {
     const cycles = await this.prisma.evaluationCycle.findMany({ orderBy: { startDate: 'desc' } });
     
     if (!cycles || cycles.length === 0) {
-      throw new NotFoundException('Nenhum ciclo de avaliação encontrado.');
+      return [];
     }
     
     return cycles;
