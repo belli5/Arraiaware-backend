@@ -36,6 +36,12 @@ export class EvaluationsService {
         const user = await this.prisma.user.findUnique({ where: { id: dto.evaluatedUserId } });
         if (!user) throw new NotFoundException(`Utilizador avaliado com ID ${dto.evaluatedUserId} não encontrado.`);
     }
+    if (dto.projectId) {
+      const project = await this.prisma.project.findUnique({ where: { id: dto.projectId }});
+      if (!project) {
+        throw new NotFoundException(`Projeto com ID ${dto.projectId} não encontrado.`);
+      }
+    }
     
     return this.prisma.peerEvaluation.create({ data: dto });
   }
