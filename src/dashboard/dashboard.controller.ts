@@ -23,4 +23,12 @@ export class DashboardController {
   getEvaluationStats(@Query('cycleId') cycleId: string): Promise<EvaluationStatsDto> {
     return this.dashboardService.getEvaluationStats(cycleId);
   }
+  @Get('overall-stats')
+@Roles(UserType.RH, UserType.ADMIN)
+@ApiOperation({ summary: 'Obtém as estatísticas consolidadas de TODOS os ciclos de avaliação.' })
+@ApiResponse({ status: 200, description: 'Estatísticas consolidadas retornadas com sucesso.', type: EvaluationStatsDto })
+@ApiResponse({ status: 403, description: 'Acesso negado. Apenas para RH ou Admin.' })
+getOverallEvaluationStats(): Promise<EvaluationStatsDto> {
+  return this.dashboardService.getOverallEvaluationStats();
+}
 }
