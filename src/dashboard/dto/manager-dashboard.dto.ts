@@ -33,6 +33,12 @@ export class EvaluationItem {
 
   @ApiProperty({ example: 'f6g7-h8i9-j0k1' })
   projectId: string;
+
+  @ApiProperty({ example: 'c2d3-e4f5-g6h7' })
+  cycleId: string;  
+  
+  @ApiProperty({ example: 'Ciclo 2025-1' })
+  cyclename: string;
 }
 
 export class ManagerDashboardDataDto {
