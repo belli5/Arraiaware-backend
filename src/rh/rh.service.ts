@@ -359,7 +359,6 @@ export class RhService {
 
         switch (record.evaluationType) {
           case 'SELF':
-            // ... (lógica para SELF evaluation permanece a mesma)
             if (!record.criterionName) { errors.push(`Registro SELF para ${record.userEmail} ignorado: 'criterionName' em falta.`); continue; }
             const criterion = await this.prisma.evaluationCriterion.upsert({ where: { criterionName: record.criterionName }, update: {}, create: { criterionName: record.criterionName, pillar: "Comportamento" } });
             
@@ -383,7 +382,6 @@ export class RhService {
             
             let projectId: string | undefined = undefined;
 
-            // --- NOVA LÓGICA PARA CRIAR E ASSOCIAR PROJETO ---
             if (record.project) {
               const projectName = record.project.trim();
               
@@ -393,7 +391,6 @@ export class RhService {
 
               if (existingProject) {
                   projectId = existingProject.id;
-                  // Garante que ambos os usuários estão como colaboradores do projeto
                   await this.prisma.project.update({
                       where: { id: projectId },
                       data: {
@@ -403,7 +400,6 @@ export class RhService {
                       }
                   });
               } else {
-                  // Procura por um admin para ser o gestor padrão do projeto
                   const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' }});
                   if (!adminUser) {
                       errors.push(`Não foi possível criar o projeto "${projectName}" pois nenhum usuário ADMIN foi encontrado para ser o gestor.`);
@@ -423,8 +419,6 @@ export class RhService {
                   }
               }
             }
-            // --- FIM DA NOVA LÓGICA ---
-
             const existingPeerEval = await this.prisma.peerEvaluation.findFirst({ where: { evaluatedUserId: userId, evaluatorUserId, cycleId: cycle.id } });
             
             if (!existingPeerEval) {
@@ -433,8 +427,8 @@ export class RhService {
                   evaluatedUserId: userId, 
                   evaluatorUserId, 
                   cycleId: cycle.id, 
-                  project: record.project, // Salva o nome do projeto
-                  projectId: projectId, // <<< Associa o ID do projeto
+                  project: record.project, 
+                  projectId: projectId, 
                   motivatedToWorkAgain: record.motivatedToWorkAgain, 
                   generalScore: Number(record.generalScore) || 0, 
                   pointsToImprove: record.pointsToImprove || 'N/A', 
@@ -449,7 +443,6 @@ export class RhService {
             break;
 
           case 'REFERENCE':
-            // ... (lógica para REFERENCE evaluation permanece a mesma)
             if (!record.indicatedEmail) { errors.push(`Registro REFERENCE para ${record.userEmail} ignorado: 'indicatedEmail' em falta.`); continue; }
             const { id: indicatedUserId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(record.indicatedEmail);
             if (indicatedWasCreated) createdUserCount++;
