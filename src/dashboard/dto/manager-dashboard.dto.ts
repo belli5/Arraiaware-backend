@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class EvaluationItem {
   @ApiProperty({ example: 'a1b2-c3d4-e5f6' })
-  evaluationId: string; 
+  id: string; 
 
   @ApiProperty({ example: 'Ana Beatriz' })
   collaborator: string;
@@ -38,7 +38,7 @@ export class EvaluationItem {
   cycleId: string;  
   
   @ApiProperty({ example: 'Ciclo 2025-1' })
-  cyclename: string;
+  cycleName: string;
 }
 
 export class ManagerDashboardDataDto {
