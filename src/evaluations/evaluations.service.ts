@@ -89,4 +89,30 @@ export class EvaluationsService {
         status: selfEvaluationDone ? 'Concluído' : 'Pendente'
     };
   }
+  async findAllPeerEvaluations(cycleId?: string) {
+  const evaluations = await this.prisma.peerEvaluation.findMany({
+    where: {
+      cycleId: cycleId,
+    },
+    include: {
+      evaluatorUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    
+      evaluatedUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return evaluations;
+}
 }
