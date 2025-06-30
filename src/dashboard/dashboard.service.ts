@@ -76,7 +76,7 @@ export class DashboardService {
         const trackRole = collab.roles.find((r) => r.type === 'TRILHA');
 
         evaluationItems.push({
-          evaluationId: `${collab.id}-${project.id}`,
+          id: `${collab.id}-${project.id}`,
           collaborator: collab.name,
           collaboratorId: collab.id,
           department: departmentRole?.name || 'N/D',
@@ -87,7 +87,7 @@ export class DashboardService {
           projectName: project.name,
           projectId: project.id,
           cycleId: project.cycle.id,
-          cyclename: project.cycle.name,
+          cycleName: project.cycle.name,
         });
       });
     });
