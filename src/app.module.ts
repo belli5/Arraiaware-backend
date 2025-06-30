@@ -7,14 +7,15 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CriteriaModule } from './criteria/criteria.module';
 import { CyclesModule } from './cycles/cycles.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
 import { ImportHistoryModule } from './import-history/import-history.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProjectsModule } from './projects/projects.module';
+import { EqualizationModule } from './rh/equalization.module';
 import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
-import { ProjectsModule } from './projects/projects.module';
-import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ImportHistoryModule,
     ProjectsModule,
     DashboardModule, 
+    EqualizationModule
   ],
   controllers: [AppController],
   providers: [
