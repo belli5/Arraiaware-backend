@@ -43,6 +43,8 @@ model Project {
 
   cycleId       String
   cycle         EvaluationCycle @relation(fields: [cycleId], references: [id])
+
+  peerEvaluations      PeerEvaluation[]
 }
 
 model Role {
@@ -112,6 +114,8 @@ model PeerEvaluation {
   cycleId              String
   evaluatedUser        User?     @relation("EvaluatedUser", fields: [evaluatedUserId], references: [id])
   evaluatorUser        User      @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id])
+  projectId            String?   // Campo para a chave estrangeira
+  Project              Project?  @relation(fields: [projectId], references: [id])
   cycle                EvaluationCycle @relation(fields: [cycleId], references: [id])
 }
 
