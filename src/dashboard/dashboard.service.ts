@@ -19,14 +19,12 @@ export class DashboardService {
       where: { isActive: true },
     });
 
-   
     const evaluationsByUsers = await this.prisma.selfEvaluation.groupBy({
       by: ['userId'],
       where: {
         cycleId: cycleId,
       },
     });
-
     const completedEvaluations = evaluationsByUsers.length;
 
     const uncompletedEvaluations = totalEvaluations - completedEvaluations;
@@ -39,6 +37,51 @@ export class DashboardService {
       overdueEvaluations = uncompletedEvaluations;
     } else {
       pendingEvaluations = uncompletedEvaluations;
+    }
+
+    return {
+      totalEvaluations,
+      completedEvaluations,
+      pendingEvaluations,
+      overdueEvaluations,
+    };
+  }
+
+  async getOverallEvaluationStats(): Promise<EvaluationStatsDto> {
+    const allCycles = await this.prisma.evaluationCycle.findMany();
+    
+    const totalActiveUsers = await this.prisma.user.count({
+      where: { isActive: true },
+    });
+
+    let totalEvaluations = 0;
+    let completedEvaluations = 0;
+    let pendingEvaluations = 0;
+    let overdueEvaluations = 0;
+    const now = new Date();
+
+    for (const cycle of allCycles) {
+      const totalForThisCycle = totalActiveUsers;
+      
+    
+      const evaluationsByUsers = await this.prisma.selfEvaluation.groupBy({
+        by: ['userId'],
+        where: {
+          cycleId: cycle.id,
+        },
+      });
+      const completedForThisCycle = evaluationsByUsers.length;
+
+      const uncompletedForThisCycle = totalForThisCycle - completedForThisCycle;
+
+      if (now > new Date(cycle.endDate)) {
+        overdueEvaluations += uncompletedForThisCycle;
+      } else {
+        pendingEvaluations += uncompletedForThisCycle;
+      }
+
+      totalEvaluations += totalForThisCycle;
+      completedEvaluations += completedForThisCycle;
     }
 
     return {
