@@ -204,4 +204,44 @@ export class UsersService {
 
     return { message: `Uma nova senha temporária foi enviada para o e-mail ${user.email}.` };
   }
+
+    async getEvaluationHistory(userId: string, cycleId: string) {
+    await this.findOne(userId);
+
+    const selfEvaluation = this.prisma.selfEvaluation.findMany({
+      where: { userId, cycleId },
+      include: { criterion: true },
+    });
+
+    const peerEvaluations = this.prisma.peerEvaluation.findMany({
+      where: { evaluatedUserId: userId, cycleId },
+      include: { evaluatorUser: { select: { id: true, name: true } } },
+    });
+
+    const leaderEvaluations = this.prisma.leaderEvaluation.findMany({
+      where: { collaboratorId: userId, cycleId },
+      include: {
+        criterion: true,
+        leader: { select: { id: true, name: true } },
+      },
+    });
+
+    const [self, peers, leaders] = await Promise.all([
+      selfEvaluation,
+      peerEvaluations,
+      leaderEvaluations,
+    ]);
+
+    if (self.length === 0 && peers.length === 0 && leaders.length === 0) {
+      throw new NotFoundException(
+        `Nenhum histórico de avaliação encontrado para o usuário com ID ${userId} no ciclo ${cycleId}.`,
+      );
+    }
+
+    return {
+      selfEvaluation: self,
+      peerEvaluations: peers,
+      leaderEvaluations: leaders,
+    };
+  }
 }
