@@ -28,6 +28,8 @@ model User {
   referencesReceived   ReferenceIndication[] @relation("IndicatedUser")
   managedProjects Project[] @relation("ManagedProjects")
   projects        Project[] @relation("CollaboratorOnProjects")
+  leaderEvaluationsAsLeader       LeaderEvaluation[]    @relation("LeaderEvaluations")
+  leaderEvaluationsAsCollaborator LeaderEvaluation[]    @relation("CollaboratorEvaluations")
 }
 
 model Project {
@@ -63,6 +65,7 @@ model EvaluationCriterion {
   description   String?
   roles         RoleCriteria[]
   selfEvaluations SelfEvaluation[]
+  leaderEvaluations LeaderEvaluation[]
 }
 
 model RoleCriteria {
@@ -84,6 +87,7 @@ model EvaluationCycle {
   peerEvaluations      PeerEvaluation[]
   referenceIndications ReferenceIndication[]
   projects             Project[]
+  leaderEvaluations    LeaderEvaluation[]
 }
 
 model SelfEvaluation {
@@ -128,6 +132,25 @@ model ReferenceIndication {
   indicatedUser   User?    @relation("IndicatedUser", fields: [indicatedUserId], references: [id])
   indicatorUser   User     @relation("IndicatorUser", fields: [indicatorUserId], references: [id])
   cycle           EvaluationCycle @relation(fields: [cycleId], references: [id])
+}
+
+model LeaderEvaluation {
+  id               String              @id @default(cuid())
+  score            Int
+  justification    String
+  submissionStatus String              @default("Pendente")
+  leader           User                @relation("LeaderEvaluations", fields: [leaderId], references: [id])
+  leaderId         String
+  collaborator     User                @relation("CollaboratorEvaluations", fields: [collaboratorId], references: [id])
+  collaboratorId   String
+  cycle            EvaluationCycle     @relation(fields: [cycleId], references: [id])
+  cycleId          String
+  criterion        EvaluationCriterion @relation(fields: [criterionId], references: [id])
+  criterionId      String
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([leaderId, collaboratorId, cycleId, criterionId])
 }
 
 enum UserType {
