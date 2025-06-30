@@ -14,6 +14,7 @@ import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
 import { ProjectsModule } from './projects/projects.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -29,7 +30,8 @@ import { ProjectsModule } from './projects/projects.module';
     EvaluationsModule,
     RhModule,
     ImportHistoryModule,
-    ProjectsModule, 
+    ProjectsModule,
+    DashboardModule, 
   ],
   controllers: [AppController],
   providers: [
