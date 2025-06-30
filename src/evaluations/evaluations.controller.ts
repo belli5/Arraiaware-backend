@@ -8,6 +8,7 @@ import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { EvaluationsService } from './evaluations.service';
+import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
 
 @ApiTags('Evaluations')
 @Controller('api/evaluations')
@@ -33,6 +34,13 @@ export class EvaluationsController {
   @ApiResponse({ status: 201, description: 'Indicação de referência submetida com sucesso.' })
   submitReferenceIndication(@Body() dto: SubmitReferenceIndicationDto) {
     return this.evaluationsService.submitReferenceIndication(dto);
+  }
+
+  @Post('leader') 
+  @ApiOperation({ summary: 'Submeter uma avaliação de líder para um liderado' })
+  @ApiResponse({ status: 201, description: 'Avaliação de líder submetida com sucesso.' })
+  submitLeaderEvaluation(@Body() dto: SubmitLeaderEvaluationDto) {
+    return this.evaluationsService.submitLeaderEvaluation(dto);
   }
 
   @Get('self/:userId')
