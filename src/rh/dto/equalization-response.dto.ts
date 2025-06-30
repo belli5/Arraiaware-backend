@@ -1,5 +1,3 @@
-// src/equalization/dto/equalization-response.dto.ts
-
 import { ApiProperty } from '@nestjs/swagger';
 import { ConsolidatedCriterionDto } from './consolidated-criterion.dto';
 

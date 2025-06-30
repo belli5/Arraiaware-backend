@@ -16,21 +16,17 @@ export class DashboardService {
     managerId: string,
     query: GetEvaluationsQueryDto,
   ): Promise<ManagerDashboardDataDto> {
-    const { cycleId, page = 1, limit = 10 } = query;
-
-    const whereClause: any = { managerId };
-    if (cycleId) {
-      whereClause.cycleId = cycleId;
-    }
+    const { page = 1, limit = 10, cycleId, search, status, department, track } = query;
 
     const projects = await this.prisma.project.findMany({
-      where: whereClause,
+      where: {
+        managerId,
+        ...(cycleId && { cycleId }),
+      },
       include: {
         collaborators: {
-          include: {
-            roles: true,
-            selfEvaluations: { where: cycleId ? { cycleId } : undefined },
-          },
+          where: { isActive: true },
+          include: { roles: true },
         },
         cycle: true,
       },
@@ -38,84 +34,92 @@ export class DashboardService {
 
     if (projects.length === 0) {
       return {
-        summary: {
-          totalCollaborators: 0,
-          completed: 0,
-          pending: 0,
-          overdue: 0,
-          overallProgress: 0,
-        },
+        summary: { totalCollaborators: 0, completed: 0, pending: 0, overdue: 0, overallProgress: 0 },
         evaluations: [],
         pagination: { totalItems: 0, totalPages: 0, currentPage: page },
       };
     }
 
-    const evaluationItems: EvaluationItem[] = [];
-    const uniqueCollaborators = new Map<string, User>();
-
-    projects.forEach((project) => {
-      if (!project.cycle) return;
-
-      project.collaborators.forEach((collab) => {
-        if (!uniqueCollaborators.has(collab.id)) {
-          uniqueCollaborators.set(collab.id, collab);
+    const collaboratorMap = new Map<string, User & { roles: any[] }>();
+    const cycleIds = new Set<string>();
+    projects.forEach(p => {
+      cycleIds.add(p.cycleId);
+      p.collaborators.forEach(c => {
+        if (!collaboratorMap.has(c.id)) {
+          collaboratorMap.set(c.id, c);
         }
-
-        const selfEval = collab.selfEvaluations.find(
-          (e) => e.cycleId === project.cycle.id,
-        );
-        
-        const isCompleted = !!selfEval;
-        const isOverdue = !isCompleted && new Date() > new Date(project.cycle.endDate);
-
-        let status = 'Pendente';
-        if (isCompleted) status = 'Concluído';
-        else if (isOverdue) status = 'Em Atraso';
-
-        const departmentRole = collab.roles.find((r) => r.type === 'CARGO');
-        const trackRole = collab.roles.find((r) => r.type === 'TRILHA');
-
-        evaluationItems.push({
-          id: `${collab.id}-${project.id}`,
-          collaborator: collab.name,
-          collaboratorId: collab.id,
-          department: departmentRole?.name || 'N/D',
-          track: trackRole?.name || 'N/D',
-          status,
-          progress: isCompleted ? 100 : 0,
-          deadline: project.cycle.endDate,
-          projectName: project.name,
-          projectId: project.id,
-          cycleId: project.cycle.id,
-          cycleName: project.cycle.name,
-        });
       });
     });
+    const collaborators = Array.from(collaboratorMap.values());
+    const targetCycleIds = Array.from(cycleIds);
 
-    const totalCollaborators = uniqueCollaborators.size;
-    const completed = evaluationItems.filter(item => item.status === 'Concluído').length;
-    const pending = evaluationItems.filter(item => item.status === 'Pendente').length;
-    const overdue = evaluationItems.filter(item => item.status === 'Em Atraso').length;
-    const totalItems = evaluationItems.length;
+    const completedEvaluations = await this.prisma.selfEvaluation.findMany({
+      where: {
+        cycleId: { in: targetCycleIds },
+        userId: { in: collaborators.map(c => c.id) },
+      },
+      distinct: ['userId', 'cycleId'],
+      select: { userId: true, cycleId: true },
+    });
+    const completedSet = new Set(completedEvaluations.map(ev => `${ev.userId}-${ev.cycleId}`));
 
-    const overallProgress =
-      totalItems > 0
-        ? Math.round((completed / totalItems) * 100)
-        : 0;
+
+    const evaluationItems: EvaluationItem[] = [];
+    projects.forEach(project => {
+        project.collaborators.forEach(collab => {
+            const isCompleted = completedSet.has(`${collab.id}-${project.cycleId}`);
+            const isOverdue = !isCompleted && new Date() > new Date(project.cycle.endDate);
+
+            let currentStatus: string;
+            if (isCompleted) currentStatus = 'Concluída';
+            else if (isOverdue) currentStatus = 'Em Atraso';
+            else currentStatus = 'Pendente';
+
+            const departmentRole = collab.roles.find(r => r.type === 'CARGO');
+            const trackRole = collab.roles.find(r => r.type === 'TRILHA');
+
+            evaluationItems.push({
+                id: `${collab.id}-${project.id}`,
+                collaborator: collab.name,
+                collaboratorId: collab.id,
+                department: departmentRole?.name || 'N/D',
+                track: trackRole?.name || 'N/D',
+                status: currentStatus,
+                progress: isCompleted ? 100 : 0,
+                deadline: project.cycle.endDate,
+                completedAt: null,
+                projectName: project.name,
+                projectId: project.id,
+                cycleId: project.cycleId,
+                cycleName: project.cycle.name,
+            });
+        });
+    });
+
+    const filteredItems = evaluationItems.filter(ev => {
+        const searchMatch = !search || ev.collaborator.toLowerCase().includes(search.toLowerCase());
+        const statusMatch = !status || ev.status === status;
+        const departmentMatch = !department || ev.department.toLowerCase().includes(department.toLowerCase());
+        const trackMatch = !track || ev.track.toLowerCase().includes(track.toLowerCase());
+        return searchMatch && statusMatch && departmentMatch && trackMatch;
+    });
+
+    const totalCollaborators = collaboratorMap.size;
+    const completedCount = evaluationItems.filter(item => item.status === 'Concluído').length;
+    const pendingCount = evaluationItems.filter(item => item.status === 'Pendente').length;
+    const overdueCount = evaluationItems.filter(item => item.status === 'Em Atraso').length;
     
+    const totalItems = filteredItems.length;
     const totalPages = Math.ceil(totalItems / limit);
-    const paginatedEvaluations = evaluationItems.slice(
-      (page - 1) * limit,
-      page * limit,
-    );
+    const paginatedEvaluations = filteredItems.slice((page - 1) * limit, page * limit);
 
     return {
       summary: {
         totalCollaborators,
-        completed,
-        pending,
-        overdue,
-        overallProgress,
+        completed: completedCount,
+        pending: pendingCount,
+        overdue: overdueCount,
+        overallProgress: evaluationItems.length > 0 ? Math.round((completedCount / evaluationItems.length) * 100) : 0,
       },
       evaluations: paginatedEvaluations,
       pagination: {
@@ -125,7 +129,6 @@ export class DashboardService {
       },
     };
   }
-
   
   async getEvaluationStats(cycleId: string): Promise<EvaluationStatsDto> {
     const cycle = await this.prisma.evaluationCycle.findUnique({
