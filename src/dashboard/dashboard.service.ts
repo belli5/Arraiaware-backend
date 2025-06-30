@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { SelfEvaluation, User } from '@prisma/client';
+import { User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from '../rh/dto/get-evaluations-query.dto';
 import { EvaluationStatsDto } from './dto/evaluation-stats.dto';
@@ -12,34 +12,24 @@ import {
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-
   async getManagerDashboardData(
     managerId: string,
     query: GetEvaluationsQueryDto,
   ): Promise<ManagerDashboardDataDto> {
     const { cycleId, page = 1, limit = 10 } = query;
 
-    if (!cycleId) {
-      throw new NotFoundException(
-        'O ID do ciclo de avaliação (cycleId) é obrigatório.',
-      );
+    const whereClause: any = { managerId };
+    if (cycleId) {
+      whereClause.cycleId = cycleId;
     }
 
-    const cycle = await this.prisma.evaluationCycle.findUnique({
-      where: { id: cycleId },
-    });
-    if (!cycle) {
-      throw new NotFoundException(`Ciclo com ID ${cycleId} não encontrado.`);
-    }
-
-    
     const projects = await this.prisma.project.findMany({
-      where: { managerId, cycleId },
+      where: whereClause,
       include: {
         collaborators: {
           include: {
             roles: true,
-            selfEvaluations: { where: { cycleId } },
+            selfEvaluations: { where: cycleId ? { cycleId } : undefined },
           },
         },
         cycle: true,
@@ -60,21 +50,23 @@ export class DashboardService {
       };
     }
 
-    
     const evaluationItems: EvaluationItem[] = [];
-    const uniqueCollaborators = new Map<string, User & { selfEvaluations: SelfEvaluation[] }>();
+    const uniqueCollaborators = new Map<string, User>();
 
     projects.forEach((project) => {
+      if (!project.cycle) return;
+
       project.collaborators.forEach((collab) => {
         if (!uniqueCollaborators.has(collab.id)) {
           uniqueCollaborators.set(collab.id, collab);
         }
 
         const selfEval = collab.selfEvaluations.find(
-          (e) => e.cycleId === cycleId,
+          (e) => e.cycleId === project.cycle.id,
         );
+        
         const isCompleted = !!selfEval;
-        const isOverdue = !isCompleted && new Date() > new Date(cycle.endDate);
+        const isOverdue = !isCompleted && new Date() > new Date(project.cycle.endDate);
 
         let status = 'Pendente';
         if (isCompleted) status = 'Concluído';
@@ -91,29 +83,26 @@ export class DashboardService {
           track: trackRole?.name || 'N/D',
           status,
           progress: isCompleted ? 100 : 0,
-          deadline: cycle.endDate,
-       
-          completedAt: null, 
+          deadline: project.cycle.endDate,
           projectName: project.name,
           projectId: project.id,
+          cycleId: project.cycle.id,
+          cyclename: project.cycle.name,
         });
       });
     });
 
-
     const totalCollaborators = uniqueCollaborators.size;
-    const completed = Array.from(uniqueCollaborators.values()).filter((c) =>
-      c.selfEvaluations.some((e) => e.cycleId === cycleId),
-    ).length;
-    const pending = totalCollaborators - completed;
-    const isCycleOverdue = new Date() > new Date(cycle.endDate);
-    const overdue = isCycleOverdue ? pending : 0;
-    const overallProgress =
-      totalCollaborators > 0
-        ? Math.round((completed / totalCollaborators) * 100)
-        : 0;
-
+    const completed = evaluationItems.filter(item => item.status === 'Concluído').length;
+    const pending = evaluationItems.filter(item => item.status === 'Pendente').length;
+    const overdue = evaluationItems.filter(item => item.status === 'Em Atraso').length;
     const totalItems = evaluationItems.length;
+
+    const overallProgress =
+      totalItems > 0
+        ? Math.round((completed / totalItems) * 100)
+        : 0;
+    
     const totalPages = Math.ceil(totalItems / limit);
     const paginatedEvaluations = evaluationItems.slice(
       (page - 1) * limit,
@@ -124,7 +113,7 @@ export class DashboardService {
       summary: {
         totalCollaborators,
         completed,
-        pending: isCycleOverdue ? 0 : pending,
+        pending,
         overdue,
         overallProgress,
       },
@@ -181,7 +170,7 @@ export class DashboardService {
     };
   }
 
- 
+  
   async getOverallEvaluationStats(): Promise<EvaluationStatsDto> {
     const allCycles = await this.prisma.evaluationCycle.findMany();
 
