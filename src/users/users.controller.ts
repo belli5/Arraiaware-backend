@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Request, UnauthorizedException, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Request, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
@@ -85,5 +85,18 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.'})
   resetPassword(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.resetPassword(id);
+  }
+
+  @Get(':id/evaluation-history')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Buscar o histórico de avaliações de um usuário para um ciclo' })
+  @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
+  @ApiResponse({ status: 200, description: 'Histórico de avaliações retornado com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Usuário ou histórico não encontrado.' })
+  getEvaluationHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.usersService.getEvaluationHistory(id, cycleId);
   }
 }
