@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
+import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
 
 @Injectable()
 export class EvaluationsService {
@@ -121,4 +122,34 @@ export class EvaluationsService {
 
   return evaluations;
 }
+  async submitLeaderEvaluation(dto: SubmitLeaderEvaluationDto) {
+    const { leaderId, collaboratorId, cycleId, evaluations } = dto;
+
+    const dataToCreate = evaluations.map((ev) => ({
+      leaderId,
+      collaboratorId,
+      cycleId,
+      criterionId: ev.criterionId,
+      score: ev.score,
+      justification: ev.justification,
+      submissionStatus: 'Concluído', 
+    }));
+
+    return this.prisma.$transaction(
+      dataToCreate.map(data =>
+        this.prisma.leaderEvaluation.upsert({
+          where: {
+            leaderId_collaboratorId_cycleId_criterionId: {
+              leaderId: data.leaderId,
+              collaboratorId: data.collaboratorId,
+              cycleId: data.cycleId,
+              criterionId: data.criterionId,
+            },
+          },
+          update: data,
+          create: data,
+        }),
+      ),
+    );
+  }
 }
