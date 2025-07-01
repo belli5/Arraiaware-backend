@@ -476,10 +476,18 @@ export class RhService {
     if (user) {
       return { id: user.id, wasCreated: false };
     }
+        const adminUser = await this.prisma.user.findFirst({
+        where: { userType: 'ADMIN' },
+    });
+    if (!adminUser) {
+        this.logger.warn(`Nenhum usuário ADMIN encontrado. O novo usuário ${email} será criado sem um líder.`);
+    }
+    const adminId = adminUser?.id;
+    
     this.logger.log(`Usuário com email ${email} não encontrado. Criando novo usuário.`);
     const initialPassword = randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(initialPassword, 10);
-    const newUser = await this.prisma.user.create({ data: { email, name: email.split('@')[0], userType: UserType.COLABORADOR, passwordHash } });
+    const newUser = await this.prisma.user.create({ data: { email, name: email.split('@')[0], userType: UserType.COLABORADOR, passwordHash ,leaderId: adminId,} });
     try {
       await this.emailService.sendWelcomeEmail(newUser.email, initialPassword);
     } catch (emailError) {
