@@ -17,6 +17,8 @@ import { EqualizationModule } from './rh/equalization.module';
 import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { GenAIModule } from './gen-ai/gen-ai.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -35,7 +37,9 @@ import { UsersModule } from './users/users.module';
     ProjectsModule,
     DashboardModule, 
     EqualizationModule, 
-    CommitteeModule
+    CommitteeModule,
+    GenAIModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
