@@ -10,15 +10,16 @@ import { CriteriaModule } from './criteria/criteria.module';
 import { CyclesModule } from './cycles/cycles.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { EvaluationsModule } from './evaluations/evaluations.module';
+import { GenAIModule } from './gen-ai/gen-ai.module';
 import { ImportHistoryModule } from './import-history/import-history.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { EqualizationModule } from './rh/equalization.module';
 import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
+import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
-import { GenAIModule } from './gen-ai/gen-ai.module';
-import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CommitteeModule,
     GenAIModule,
     NotificationsModule,
+    TeamModule,
   ],
   controllers: [AppController],
   providers: [
