@@ -77,4 +77,31 @@ export class EmailService {
         this.logger.error(`Erro ao enviar email de Brutal Facts para ${to}: ${error.message}`, error.stack);
     }
   }
+  async sendSummaryEmail(to: string, requestorName: string, collaboratorName: string, cycleName: string, summary: string) {
+    this.logger.log(`[EMAIL DEBUG] Tentando enviar email de 'Resumo de Equalização' para ${to}`);
+
+    const mailOptions = {
+        from: `"Plataforma RPE" <${this.configService.get<string>('SMTP_FROM_EMAIL', 'noreply@rpe.com')}>`,
+        to: to,
+        subject: `[RPE] Resumo da Análise de Equalização para ${collaboratorName}`,
+        html: `
+            <h1>Olá, ${requestorName}!</h1>
+            <p>Conforme solicitado, aqui está o resumo gerado pela IA para o colaborador <strong>${collaboratorName}</strong> referente ao ciclo <strong>${cycleName}</strong>.</p>
+            <div style="background-color: #f5f5f5; border-left: 4px solid #337ab7; padding: 15px; margin-top: 15px;">
+              ${summary.replace(/\n/g, '<br>')}
+            </div>
+            <br>
+            <p>Este resumo pode ser usado como base para as discussões do comitê de equalização.</p>
+            <p>Atenciosamente,</p>
+            <p>Equipe Rocket Corp.</p>
+        `,
+    };
+
+    try {
+        const info = await this.transporter.sendMail(mailOptions);
+        this.logger.log(`Email de Resumo de Equalização enviado com sucesso para: ${to}. Mensagem ID: ${info.messageId}`);
+    } catch (error) {
+        this.logger.error(`Erro ao enviar email de Resumo de Equalização para ${to}: ${error.message}`, error.stack);
+    }
+  }
 }
