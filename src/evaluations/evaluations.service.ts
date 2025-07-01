@@ -76,9 +76,9 @@ export class EvaluationsService {
     });
   }
   
-  async findReferenceIndicationsForUser(indicatedUserId: string, cycleId: string) {
+  async findReferenceIndicationsForUser(indicatorUserId: string, cycleId: string) {
     return this.prisma.referenceIndication.findMany({
-      where: { indicatedUserId, cycleId },
+      where: { indicatorUserId, cycleId },
       include: {
         indicatorUser: { select: { id: true, name: true } },
       },
@@ -151,5 +151,22 @@ export class EvaluationsService {
         }),
       ),
     );
+  }
+  async findPeerEvaluationsDoneByUser(evaluatorUserId: string, cycleId: string) {
+    return this.prisma.peerEvaluation.findMany({
+      where: { evaluatorUserId, cycleId },
+      include: {
+        evaluatedUser: { select: { id: true, name: true } }, 
+      },
+    });
+  }
+  
+  async findReferenceIndicationsDoneByUser(indicatorUserId: string, cycleId: string) {
+    return this.prisma.referenceIndication.findMany({
+      where: { indicatorUserId, cycleId },
+      include: {
+        indicatedUser: { select: { id: true, name: true } }, 
+      },
+    });
   }
 }
