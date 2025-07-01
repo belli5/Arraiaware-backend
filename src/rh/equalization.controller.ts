@@ -1,10 +1,11 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { EqualizationResponseDto } from './dto/equalization-response.dto';
 import { EqualizationService } from './equalization.service';
+import { FinalizeEqualizationDto } from './dto/finalize-equalization.dto';
 
 @ApiTags('RH & Admin', 'Equalization')
 @Controller('api/equalization')
@@ -39,5 +40,22 @@ export class EqualizationController {
     @Query('cycleId', ParseUUIDPipe) cycleId: string,
   ): Promise<{ summary: string }> {
     return this.equalizationService.getEqualizationSummary(userId, cycleId);
+  }
+
+  @Patch('finalize/:userId')
+  @Roles(UserType.ADMIN, UserType.RH)
+  @ApiOperation({ summary: 'Finaliza a equalização de um colaborador, salvando notas e observações' })
+  @ApiQuery({ name: 'cycleId', type: 'string', required: true })
+  @ApiResponse({ status: 200, description: 'Equalização finalizada com sucesso.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado.' })
+  @ApiResponse({ status: 404, description: 'Colaborador ou ciclo não encontrado.' })
+  finalizeEqualization(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+    @Req() request, 
+    @Body() dto: FinalizeEqualizationDto,
+  ) {
+    const committeeMemberId = request.user.id; 
+    return this.equalizationService.finalizeEqualization(userId, cycleId, committeeMemberId, dto);
   }
 }
