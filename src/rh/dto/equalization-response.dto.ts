@@ -1,6 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ConsolidatedCriterionDto } from './consolidated-criterion.dto';
 
+export class PeerFeedbackSummaryDto {
+  @ApiProperty()
+  evaluatorName: string;
+
+  @ApiProperty()
+  pointsToImprove: string;
+
+  @ApiProperty()
+  pointsToExplore: string;
+}
+
+export class ReferenceFeedbackSummaryDto {
+  @ApiProperty()
+  indicatedName: string;
+
+  @ApiProperty()
+  justification: string;
+}
+
 export class EqualizationResponseDto {
   @ApiProperty()
   collaboratorId: string;
@@ -14,13 +33,12 @@ export class EqualizationResponseDto {
   @ApiProperty({ example: 'Avaliação Semestral 2025.1' })
   cycleName: string;
 
-  @ApiProperty({ 
-    description: 'A média geral das avaliações de pares (360).',
-    example: 4.5,
-    nullable: true 
-  })
-  peerAverageScore?: number | null;
-
   @ApiProperty({ type: [ConsolidatedCriterionDto] })
   consolidatedCriteria: ConsolidatedCriterionDto[];
+
+  @ApiProperty({ type: [PeerFeedbackSummaryDto], description: "Sumário dos feedbacks 360 recebidos." })
+  peerFeedbacks: PeerFeedbackSummaryDto[];
+
+  @ApiProperty({ type: [ReferenceFeedbackSummaryDto], description: "Sumário das indicações de referência recebidas." })
+  referenceFeedbacks: ReferenceFeedbackSummaryDto[];
 }
