@@ -6,6 +6,7 @@ import { GenAIService } from 'src/gen-ai/gen-ai.service';
 import { PeerFeedbackSummaryDto } from './dto/equalization-response.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { FinalizeEqualizationDto } from './dto/finalize-equalization.dto';
+import { User } from '@prisma/client';
 
 
 @Injectable()
@@ -96,14 +97,27 @@ export class EqualizationService {
   }
 
 
-  async getEqualizationSummary(userId: string, cycleId: string): Promise<{ summary: string }> {
+  async getEqualizationSummary(userId: string, cycleId: string, requestor: User): Promise<{ summary: string }> {
     const consolidatedData = await this.getConsolidatedView(userId, cycleId);
     if (!consolidatedData) {
       throw new NotFoundException('Não foi possível gerar o resumo pois os dados consolidados não foram encontrados.');
     }
 
-
     const summary = await this.genAIService.generateEqualizationSummary(consolidatedData);
+
+
+    if (requestor && requestor.email) {
+      this.logger.log(`Enviando resumo de equalização para o email: ${requestor.email}`);
+      await this.notificationsService.sendEqualizationSummaryEmail(
+        requestor,
+        consolidatedData.collaboratorName,
+        consolidatedData.cycleName,
+        summary
+      );
+    } else {
+      this.logger.warn(`Não foi possível enviar o email de resumo. O solicitante não foi encontrado ou não possui email.`);
+    }
+
     return { summary };
   }
 
