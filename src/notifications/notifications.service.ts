@@ -22,4 +22,19 @@ export class NotificationsService {
       brutalFacts,
     );
   }
+
+    async sendEqualizationSummaryEmail(requestor: User, collaboratorName: string, cycleName: string, summary: string) {
+    if (!requestor.email) {
+        this.logger.warn(`Solicitante ${requestor.name} não possui email para receber resumo.`);
+        return;
+    }
+
+    await this.emailService.sendSummaryEmail(
+        requestor.email,
+        requestor.name,
+        collaboratorName,
+        cycleName,
+        summary,
+    );
+  }
 }
