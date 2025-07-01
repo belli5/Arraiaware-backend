@@ -30,6 +30,10 @@ model User {
   projects        Project[] @relation("CollaboratorOnProjects")
   leaderEvaluationsAsLeader       LeaderEvaluation[]    @relation("LeaderEvaluations")
   leaderEvaluationsAsCollaborator LeaderEvaluation[]    @relation("CollaboratorEvaluations")
+  finalizedEvaluationsAsCollaborator FinalizedEvaluation[] @relation("FinalizedEvaluationsAsCollaborator")
+  finalizedEvaluationsAsFinalizer    FinalizedEvaluation[] @relation("FinalizedEvaluationsAsFinalizer")
+  logsAsCollaborator                 EqualizationLog[]     @relation("LogsAsCollaborator")
+  logsAsChanger                      EqualizationLog[]     @relation("LogsAsChanger")
 }
 
 model Project {
@@ -66,6 +70,7 @@ model EvaluationCriterion {
   roles         RoleCriteria[]
   selfEvaluations SelfEvaluation[]
   leaderEvaluations LeaderEvaluation[]
+  finalizedEvaluations FinalizedEvaluation[] 
 }
 
 model RoleCriteria {
@@ -88,6 +93,8 @@ model EvaluationCycle {
   referenceIndications ReferenceIndication[]
   projects             Project[]
   leaderEvaluations    LeaderEvaluation[]
+  finalizedEvaluations  FinalizedEvaluation[] 
+  equalizationLogs      EqualizationLog[]     
 }
 
 model SelfEvaluation {
@@ -118,7 +125,7 @@ model PeerEvaluation {
   cycleId              String
   evaluatedUser        User?     @relation("EvaluatedUser", fields: [evaluatedUserId], references: [id])
   evaluatorUser        User      @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id])
-  projectId            String?   // Campo para a chave estrangeira
+  projectId            String?  
   Project              Project?  @relation(fields: [projectId], references: [id])
   cycle                EvaluationCycle @relation(fields: [cycleId], references: [id])
 }
@@ -167,3 +174,34 @@ model ImportHistory {
   file        Bytes
 }
 
+model FinalizedEvaluation {
+  id              String              @id @default(cuid())
+  finalScore      Int
+  collaboratorId  String
+  cycleId         String
+  criterionId     String
+  finalizedById   String
+  finalizedAt     DateTime            @default(now())
+  collaborator    User                @relation("FinalizedEvaluationsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cycle           EvaluationCycle     @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  criterion       EvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  finalizedBy     User                @relation("FinalizedEvaluationsAsFinalizer", fields: [finalizedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([collaboratorId, cycleId, criterionId])
+}
+
+model EqualizationLog {
+  id              String          @id @default(cuid())
+  changeType      String 
+  criterionName   String?
+  previousValue   String?
+  newValue        String?
+  observation     String?
+  changedById     String
+  collaboratorId  String
+  cycleId         String
+  createdAt       DateTime        @default(now())
+  changedBy       User            @relation("LogsAsChanger", fields: [changedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  collaborator    User            @relation("LogsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cycle           EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
