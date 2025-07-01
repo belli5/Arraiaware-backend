@@ -1,6 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  EvaluationCriterion,
+  LeaderEvaluation,
+  PeerEvaluation,
+  Project,
+  SelfEvaluation,
+  User,
+} from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
+
+type SelfEvaluationWithRelations = SelfEvaluation & { user: User; criterion: EvaluationCriterion; };
+type LeaderEvaluationWithRelations = LeaderEvaluation & { collaborator: User; leader: User; criterion: EvaluationCriterion; };
+type PeerEvaluationWithRelations = PeerEvaluation & { evaluatedUser: User | null; evaluatorUser: User; Project: Project | null; };
 
 @Injectable()
 export class CommitteeService {
@@ -17,11 +29,11 @@ export class CommitteeService {
     const [selfEvaluations, leaderEvaluations, peerEvaluations] =
       await Promise.all([
         this.prisma.selfEvaluation.findMany({
-          where: { cycleId },
+          where: { cycleId, submissionStatus: 'CONCLUIDA' },
           include: { user: true, criterion: true },
         }),
         this.prisma.leaderEvaluation.findMany({
-          where: { cycleId },
+          where: { cycleId, submissionStatus: 'CONCLUIDA' },
           include: { collaborator: true, leader: true, criterion: true },
         }),
         this.prisma.peerEvaluation.findMany({
@@ -34,63 +46,76 @@ export class CommitteeService {
         }),
       ]);
 
-    const flatData = [];
+    const consolidatedData = new Map<string, any>();
 
-    selfEvaluations.forEach((ev) => {
-      flatData.push({
-        'ID Colaborador': ev.userId,
-        'Nome Colaborador': ev.user.name,
-        'Email Colaborador': ev.user.email,
-        'Tipo de Avaliação': 'Autoavaliação',
-        'Avaliador': ev.user.name,
-        'Critério': ev.criterion.criterionName,
-        'Pilar': ev.criterion.pillar,
-        'Nota (1-5)': ev.score,
-        'Justificativa': ev.justification,
-        'Nota Geral (Pares)': null,
-        'Pontos a Melhorar (Pares)': null,
-        'Pontos a Explorar (Pares)': null,
-        'Projeto (Pares)': null,
-      });
+    const getOrCreateCollaboratorEntry = (user: { id: string; name: string; email: string; }) => {
+      if (!consolidatedData.has(user.id)) {
+        consolidatedData.set(user.id, {
+          'Nome Colaborador': user.name,
+          'Email Colaborador': user.email,
+        });
+      }
+      return consolidatedData.get(user.id);
+    };
+
+    (selfEvaluations as SelfEvaluationWithRelations[]).forEach((ev) => {
+      const entry = getOrCreateCollaboratorEntry(ev.user);
+      entry[`Autoavaliação - ${ev.criterion.criterionName}`] = ev.score;
+      entry['Autoavaliação - Justificativas'] =
+        `${entry['Autoavaliação - Justificativas'] || ''}${ev.criterion.criterionName}: ${ev.justification}\n`;
     });
 
-    leaderEvaluations.forEach((ev) => {
-      flatData.push({
-        'ID Colaborador': ev.collaboratorId,
-        'Nome Colaborador': ev.collaborator.name,
-        'Email Colaborador': ev.collaborator.email,
-        'Tipo de Avaliação': 'Avaliação do Líder',
-        'Avaliador': ev.leader.name,
-        'Critério': ev.criterion.criterionName,
-        'Pilar': ev.criterion.pillar,
-        'Nota (1-5)': ev.score,
-        'Justificativa': ev.justification,
-        'Nota Geral (Pares)': null,
-        'Pontos a Melhorar (Pares)': null,
-        'Pontos a Explorar (Pares)': null,
-        'Projeto (Pares)': null,
-      });
+    (leaderEvaluations as LeaderEvaluationWithRelations[]).forEach((ev) => {
+      const entry = getOrCreateCollaboratorEntry(ev.collaborator);
+      entry[`Avaliação do Líder - ${ev.criterion.criterionName}`] = ev.score;
+      entry['Avaliação do Líder - Justificativas'] =
+        `${entry['Avaliação do Líder - Justificativas'] || ''}${ev.criterion.criterionName}: ${ev.justification}\n`;
     });
 
-    peerEvaluations.forEach((ev) => {
-      flatData.push({
-        'ID Colaborador': ev.evaluatedUserId,
-        'Nome Colaborador': ev.evaluatedUser?.name || 'N/A',
-        'Email Colaborador': ev.evaluatedUser?.email || 'N/A',
-        'Tipo de Avaliação': 'Avaliação de Pares (360)',
-        'Avaliador': ev.evaluatorUser.name,
-        'Critério': null,
-        'Pilar': null,
-        'Nota (1-5)': null,
-        'Justificativa': null,
-        'Nota Geral (Pares)': ev.generalScore,
-        'Pontos a Melhorar (Pares)': ev.pointsToImprove,
-        'Pontos a Explorar (Pares)': ev.pointsToExplore,
-        'Projeto (Pares)': ev.Project?.name || 'N/A',
-      });
+    const peerAggregations = (peerEvaluations as PeerEvaluationWithRelations[]).reduce((acc, ev) => {
+      if (!ev.evaluatedUser) return acc;
+
+      const evaluatedId = ev.evaluatedUser.id;
+      if (!acc[evaluatedId]) {
+        acc[evaluatedId] = {
+          scores: [],
+          pointsToImprove: [],
+          pointsToExplore: [],
+          user: ev.evaluatedUser,
+        };
+      }
+      acc[evaluatedId].scores.push(ev.generalScore);
+      acc[evaluatedId].pointsToImprove.push(`- ${ev.pointsToImprove} (Avaliador: ${ev.evaluatorUser.name})`);
+      acc[evaluatedId].pointsToExplore.push(`- ${ev.pointsToExplore} (Avaliador: ${ev.evaluatorUser.name})`);
+
+      return acc;
+    }, {} as Record<string, any>);
+
+    Object.values(peerAggregations).forEach((agg: any) => {
+      const entry = getOrCreateCollaboratorEntry(agg.user);
+      const averageScore = agg.scores.reduce((a, b) => a + b, 0) / agg.scores.length;
+
+      entry['Média Geral (Pares)'] = parseFloat(averageScore.toFixed(2));
+      entry['Pontos a Melhorar (Pares)'] = agg.pointsToImprove.join('\n');
+      entry['Pontos a Explorar (Pares)'] = agg.pointsToExplore.join('\n');
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(flatData);
+    const finalDataForExcel = Array.from(consolidatedData.values());
+    if (finalDataForExcel.length === 0) {
+      return { fileName: `nenhuma_avaliacao_concluida.xlsx`, buffer: Buffer.from('') };
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(finalDataForExcel);
+
+    const columnWidths = Object.keys(finalDataForExcel[0] || {}).map(key => {
+      let maxWidth = 40;
+      const minWidth = key.length + 2;
+      const contentWidth = finalDataForExcel.reduce((w, r) => Math.max(w, (r[key] || "").toString().length), 0);
+      const finalWidth = Math.min(maxWidth, Math.max(minWidth, contentWidth + 2));
+      return { wch: finalWidth };
+    });
+    worksheet['!cols'] = columnWidths;
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Avaliacoes Consolidadas');
 
