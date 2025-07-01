@@ -49,7 +49,9 @@ export class EmailService {
     }
   }
 
-    async sendBrutalFactsEmail(to: string, mentorName: string, menteeName: string, cycleName: string, brutalFacts: string) {
+  async sendBrutalFactsEmail(to: string, mentorName: string, menteeName: string, cycleName: string, brutalFacts: string) {
+    this.logger.log(`[EMAIL DEBUG] Tentando enviar email de 'Brutal Facts' para ${to}`);
+    
     const mailOptions = {
         from: `"Plataforma RPE" <${this.configService.get<string>('SMTP_FROM_EMAIL', 'noreply@rpe.com')}>`,
         to: to,
