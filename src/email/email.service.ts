@@ -48,4 +48,31 @@ export class EmailService {
         this.logger.error(`Erro ao enviar email de boas-vindas para ${to}: ${error.message}`, error.stack);
     }
   }
+
+    async sendBrutalFactsEmail(to: string, mentorName: string, menteeName: string, cycleName: string, brutalFacts: string) {
+    const mailOptions = {
+        from: `"Plataforma RPE" <${this.configService.get<string>('SMTP_FROM_EMAIL', 'noreply@rpe.com')}>`,
+        to: to,
+        subject: `[RPE] Pontos de Foco para o PDI de ${menteeName}`,
+        html: `
+            <h1>Olá, ${mentorName}!</h1>
+            <p>O processo de equalização para o ciclo <strong>${cycleName}</strong> foi concluído para <strong>${menteeName}</strong>.</p>
+            <p>Abaixo estão os pontos de foco ("Brutal Facts") extraídos para auxiliar na criação do Plano de Desenvolvimento Individual (PDI) e na sua próxima sessão de feedback:</p>
+            <div style="background-color: #f5f5f5; border-left: 4px solid #f0ad4e; padding: 15px; margin-top: 15px;">
+              ${brutalFacts.replace(/\n/g, '<br>')}
+            </div>
+            <br>
+            <p>Utilize estes insights para guiar uma conversa produtiva e focada no desenvolvimento.</p>
+            <p>Atenciosamente,</p>
+            <p>Equipe Rocket Corp.</p>
+        `,
+    };
+
+    try {
+        const info = await this.transporter.sendMail(mailOptions);
+        this.logger.log(`Email de Brutal Facts enviado com sucesso para: ${to}. Mensagem ID: ${info.messageId}`);
+    } catch (error) {
+        this.logger.error(`Erro ao enviar email de Brutal Facts para ${to}: ${error.message}`, error.stack);
+    }
+  }
 }
