@@ -105,4 +105,24 @@ export class EvaluationsController {
   findPeerEvaluationById(@Param('id', ParseUUIDPipe) id: string) {
     return this.evaluationsService. findAllPeerEvaluations(id);
   }
+
+  @Get('peer/done-by/:userId')
+  @ApiOperation({ summary: 'Buscar avaliações de pares feitas por um usuário' })
+  @ApiQuery({ name: 'cycleId', type: 'string', required: true })
+  findPeerEvaluationsDoneByUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.evaluationsService.findPeerEvaluationsDoneByUser(userId, cycleId);
+  }
+
+  @Get('reference/done-by/:userId')
+  @ApiOperation({ summary: 'Buscar indicações de referência feitas por um usuário' })
+  @ApiQuery({ name: 'cycleId', type: 'string', required: true })
+  findReferenceIndicationsDoneByUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.evaluationsService.findReferenceIndicationsDoneByUser(userId, cycleId);
+  }
 }
