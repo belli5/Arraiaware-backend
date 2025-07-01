@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { CommitteeModule } from './comitte/committee.module';
 import { CriteriaModule } from './criteria/criteria.module';
 import { CyclesModule } from './cycles/cycles.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -33,7 +34,8 @@ import { UsersModule } from './users/users.module';
     ImportHistoryModule,
     ProjectsModule,
     DashboardModule, 
-    EqualizationModule
+    EqualizationModule, 
+    CommitteeModule
   ],
   controllers: [AppController],
   providers: [
