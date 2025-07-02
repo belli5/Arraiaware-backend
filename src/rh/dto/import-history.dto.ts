@@ -72,6 +72,11 @@ export class HistoryItemDto {
   @IsString()
   @IsOptional()
   pointsToExplore?: string;
+
+  @ApiPropertyOptional({ description: 'Unidade do colaborador (extraída da aba de perfil)' })
+  @IsString()
+  @IsOptional()
+  unidade?: string;
 }
 
 export class ImportHistoryDto {
