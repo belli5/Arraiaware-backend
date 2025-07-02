@@ -2,11 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCycleDto } from './dto/create-cycle.dto';
 import { UpdateCycleDto } from './dto/update-cycle.dto';
+import { CannotUpdateClosedCycleException } from './exceptions/cannot-update-closed-cycle.exception';
 import { CycleInUseException } from './exceptions/cycle-in-use.exception';
 import { CycleNameConflictException } from './exceptions/cycle-name-conflict.exception';
 import { CycleNotFoundException } from './exceptions/cycle-not-found.exception';
 import { InvalidDateRangeException } from './exceptions/invalid-date-range.exception';
-import { CannotUpdateClosedCycleException } from './exceptions/cannot-update-closed-cycle.exception';
 
 @Injectable()
 export class CyclesService {
@@ -85,5 +85,15 @@ export class CyclesService {
     }
 
     return this.prisma.evaluationCycle.delete({ where: { id } });
+  }
+  async findActiveCycle() {
+    return this.prisma.evaluationCycle.findFirst({
+      where: {
+        status: 'Aberto',
+      },
+      orderBy: {
+        startDate: 'desc',
+      },
+    });
   }
 }
