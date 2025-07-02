@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
 import { GetEvaluationsQueryDto } from 'src/rh/dto/get-evaluations-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
+import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 
 @ApiTags('Committee')
 @Controller('api/committee')
@@ -48,11 +49,9 @@ export class CommitteeController {
 
   @Get('panel')
   @Roles(UserType.ADMIN, UserType.RH)
-  @ApiOperation({ summary: 'Painel do comitê para visualizar e editar avaliações consolidadas' })
+  @ApiOperation({ summary: 'Painel do comitê para visualizar e editar avaliações concluídas' })
   @ApiResponse({ status: 200, description: 'Dados do painel retornados com sucesso.' })
-  @ApiQuery({ name: 'cycleId', required: false, description: 'ID do ciclo para filtrar. Se não, usa o mais recente.' })
-  @ApiQuery({ name: 'search', required: false, description: 'Filtra por nome do colaborador.' })
-  getCommitteePanel(@Query() query: GetEvaluationsQueryDto) {
+  getCommitteePanel(@Query() query: GetCommitteePanelQueryDto) { 
     return this.committeeService.getCommitteePanel(query);
   }
 
