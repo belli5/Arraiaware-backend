@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TeamInfoDto } from './dto/team-info.dto';
+import { TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
 
 @Injectable()
 export class TeamService {
@@ -47,5 +47,28 @@ export class TeamService {
       managerName: project.manager.name,
       collaborators: teamMates,
     };
+  }
+
+  async getTeamByManager(managerId: string): Promise<TeamMemberDto[]> {
+    const manager = await this.prisma.user.findUnique({
+      where: { id: managerId },
+    });
+
+    if (!manager) {
+      throw new NotFoundException(`Gestor com ID ${managerId} não encontrado.`);
+    }
+
+    const teamMembers = await this.prisma.user.findMany({
+      where: {
+        leaderId: managerId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    return teamMembers;
   }
 }
