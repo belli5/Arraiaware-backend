@@ -42,6 +42,7 @@ import { UsersModule } from './users/users.module';
     GenAIModule,
     NotificationsModule,
     TeamModule,
+    
   ],
   controllers: [AppController],
   providers: [
