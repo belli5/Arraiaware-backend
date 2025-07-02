@@ -9,5 +9,6 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
   imports: [PrismaModule, GenAIModule,NotificationsModule],
   controllers: [EqualizationController],
   providers: [EqualizationService],
+  exports: [EqualizationService],
 })
 export class EqualizationModule {}
