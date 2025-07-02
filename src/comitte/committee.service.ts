@@ -191,7 +191,8 @@ export class CommitteeService {
   }
 
   async getCommitteePanel(query: GetEvaluationsQueryDto) {
-    const { page = 1, limit = 10, cycleId: queryCycleId, search } = query;
+    const { page = 1, limit = 10, cycleId: queryCycleId, search, track } = query;
+
     const cycleId = queryCycleId || (await this.getLastCycleId());
     const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
     if (!cycle) throw new NotFoundException(`Ciclo com ID ${cycleId} não encontrado.`);
@@ -199,23 +200,37 @@ export class CommitteeService {
     const whereClause: Prisma.UserWhereInput = {
       isActive: true,
       userType: 'COLABORADOR',
-      ...(search && { name: { contains: search } }),
     };
 
-    const totalItems = await this.prisma.user.count({ where: whereClause });
-    const collaborators = await this.prisma.user.findMany({
+    if (search) {
+      whereClause.name = { contains: search};
+    }
+
+    if (track) {
+      whereClause.roles = {
+        some: {
+          name: { contains: track},
+          type: 'TRILHA',
+        },
+      };
+    }
+
+    const allFilteredCollaborators = await this.prisma.user.findMany({
       where: whereClause,
-      include: { roles: { where: { type: 'CARGO' } } },
-      skip: (page - 1) * limit,
-      take: limit,
+      include: {
+        roles: { where: { type: 'CARGO' } },
+      },
       orderBy: { name: 'asc' },
     });
 
     const evaluationsData = await Promise.all(
-      collaborators.map(async user => {
+      allFilteredCollaborators.map(async user => {
         const [selfEvals, peerEvals, leaderEvals, finalizedEval, equalizationLog, aiSummary] = await Promise.all([
           this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId }, select: { score: true } }),
-          this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId }, select: { generalScore: true } }),
+          this.prisma.peerEvaluation.findMany({
+            where: { evaluatedUserId: user.id, cycleId },
+            select: { generalScore: true },
+          }),
           this.prisma.leaderEvaluation.findMany({ where: { collaboratorId: user.id, cycleId }, select: { score: true } }),
           this.prisma.finalizedEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
           this.prisma.equalizationLog.findFirst({
@@ -229,7 +244,9 @@ export class CommitteeService {
         ]);
 
         const selfEvaluationScore =
-          selfEvals.length > 0 ? parseFloat((selfEvals.reduce((acc, ev) => acc + ev.score, 0) / selfEvals.length).toFixed(1)) : null;
+          selfEvals.length > 0
+            ? parseFloat((selfEvals.reduce((acc, ev) => acc + ev.score, 0) / selfEvals.length).toFixed(1))
+            : null;
         const peerEvaluationScore =
           peerEvals.length > 0
             ? parseFloat((peerEvals.reduce((acc, ev) => acc + ev.generalScore, 0) / peerEvals.length).toFixed(1))
@@ -239,11 +256,8 @@ export class CommitteeService {
             ? parseFloat((leaderEvals.reduce((acc, ev) => acc + ev.score, 0) / leaderEvals.length).toFixed(1))
             : null;
 
-        let status: 'Completo' | 'Parcial' | 'Pendente' = 'Pendente';
-        if (selfEvaluationScore !== null && peerEvaluationScore !== null && managerEvaluationScore !== null) {
-          status = 'Completo';
-        } else if (selfEvaluationScore !== null || peerEvaluationScore !== null || managerEvaluationScore !== null) {
-          status = 'Parcial';
+        if (selfEvaluationScore === null || peerEvaluationScore === null || managerEvaluationScore === null) {
+          return null; 
         }
 
         return {
@@ -253,7 +267,6 @@ export class CommitteeService {
           collaaboratorId: user.id,
           cycleName: cycle.name,
           cicloId: cycle.id,
-          status,
           selfEvaluationScore,
           peerEvaluationScore,
           managerEvaluationScore,
@@ -264,9 +277,15 @@ export class CommitteeService {
       }),
     );
 
+    const completedEvaluations = evaluationsData.filter(evaluation => evaluation !== null);
+
+    const totalItems = completedEvaluations.length;
+    const totalPages = Math.ceil(totalItems / limit);
+    const paginatedData = completedEvaluations.slice((page - 1) * limit, page * limit);
+
     return {
-      evaluations: evaluationsData,
-      pagination: { totalItems, totalPages: Math.ceil(totalItems / limit), currentPage: page },
+      evaluations: paginatedData,
+      pagination: { totalItems, totalPages, currentPage: page },
     };
   }
 
