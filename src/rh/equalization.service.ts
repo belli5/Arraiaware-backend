@@ -48,8 +48,6 @@ export class EqualizationService {
       pointsToExplore: p.pointsToExplore,
     }));
 
-
-
     const referenceFeedbacks: ReferenceFeedbackSummaryDto[] = referenceIndications.map(r => ({
       indicatedName: r.indicatedUser?.name ?? 'Anônimo',
       justification: r.justification,
@@ -105,6 +103,15 @@ export class EqualizationService {
 
     const summary = await this.genAIService.generateEqualizationSummary(consolidatedData);
 
+    await this.prisma.aISummary.create({
+      data: {
+        summaryType: 'EQUALIZATION_SUMMARY',
+        content: summary,
+        collaboratorId: userId,
+        cycleId: cycleId,
+        generatedById: requestor.id,
+      },
+    });
 
     if (requestor && requestor.email) {
       this.logger.log(`Enviando resumo de equalização para o email: ${requestor.email}`);
@@ -112,7 +119,7 @@ export class EqualizationService {
         requestor,
         consolidatedData.collaboratorName,
         consolidatedData.cycleName,
-        summary
+        summary,
       );
     } else {
       this.logger.warn(`Não foi possível enviar o email de resumo. O solicitante não foi encontrado ou não possui email.`);
@@ -129,82 +136,100 @@ export class EqualizationService {
   ) {
     const { finalizedCriteria, committeeObservation } = dto;
 
-    const collaborator = await this.prisma.user.findUnique({
-      where: { id: collaboratorId },
-      include: { leader: true },
-    });
-    
-    const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
+    const [collaborator, cycle, committeeMember, criteriaFromDb] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: collaboratorId }, include: { leader: true } }),
+      this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } }),
+      this.prisma.user.findUnique({ where: { id: committeeMemberId } }),
+      this.prisma.evaluationCriterion.findMany({
+        where: { id: { in: finalizedCriteria.map(c => c.criterionId) } },
+      }),
+    ]);
 
     if (!collaborator || !cycle) {
       throw new NotFoundException('Colaborador ou Ciclo não encontrado.');
+    }
+    if (!committeeMember) {
+      throw new NotFoundException(`Membro do comitê com ID ${committeeMemberId} não encontrado.`);
+    }
+
+    const criteriaIdsFromDb = new Set(criteriaFromDb.map(c => c.id));
+    const invalidCriterionIds = finalizedCriteria.map(c => c.criterionId).filter(id => !criteriaIdsFromDb.has(id));
+
+    if (invalidCriterionIds.length > 0) {
+      throw new NotFoundException(`Os seguintes critérios não foram encontrados: ${invalidCriterionIds.join(', ')}`);
     }
 
     const transactionPayload = [];
 
     if (committeeObservation) {
-      transactionPayload.push(this.prisma.equalizationLog.create({
-        data: {
-          changeType: 'Observação',
-          observation: committeeObservation,
-          changedById: committeeMemberId,
-          collaboratorId,
-          cycleId,
-        },
-      }));
+      transactionPayload.push(
+        this.prisma.equalizationLog.create({
+          data: {
+            changeType: 'Observação',
+            observation: committeeObservation,
+            changedById: committeeMemberId,
+            collaboratorId,
+            cycleId,
+          },
+        }),
+      );
     }
 
     const originalLeaderEvaluations = await this.prisma.leaderEvaluation.findMany({
-        where: {
-            collaboratorId,
-            cycleId,
-            criterionId: { in: finalizedCriteria.map(c => c.criterionId) }
-        },
-        include: {
-            criterion: { select: { criterionName: true } }
-        }
+      where: {
+        collaboratorId,
+        cycleId,
+        criterionId: { in: finalizedCriteria.map(c => c.criterionId) },
+      },
+      include: {
+        criterion: { select: { criterionName: true } },
+      },
     });
     const originalLeaderEvalsMap = new Map(originalLeaderEvaluations.map(e => [e.criterionId, e]));
 
     for (const criterion of finalizedCriteria) {
-        const originalEval = originalLeaderEvalsMap.get(criterion.criterionId);
-        const originalScore = originalEval?.score;
-        const finalScore = criterion.finalScore;
+      const originalEval = originalLeaderEvalsMap.get(criterion.criterionId);
+      const originalScore = originalEval?.score;
+      const finalScore = criterion.finalScore;
 
-        if (originalScore !== finalScore) {
-             transactionPayload.push(this.prisma.equalizationLog.create({
-                data: {
-                    changeType: 'Nota',
-                    criterionName: originalEval?.criterion.criterionName || 'Critério desconhecido',
-                    previousValue: originalScore?.toString() ?? 'N/A',
-                    newValue: finalScore.toString(),
-                    changedById: committeeMemberId,
-                    collaboratorId,
-                    cycleId,
-                }
-            }));
-        }
+      if (originalScore !== finalScore) {
+        transactionPayload.push(
+          this.prisma.equalizationLog.create({
+            data: {
+              changeType: 'Nota',
+              criterionName: originalEval?.criterion.criterionName || 'Critério desconhecido',
+              previousValue: originalScore?.toString() ?? 'N/A',
+              newValue: finalScore.toString(),
+              changedById: committeeMemberId,
+              collaboratorId,
+              cycleId,
+            },
+          }),
+        );
+      }
 
-        transactionPayload.push(this.prisma.finalizedEvaluation.upsert({
-            where: {
-                collaboratorId_cycleId_criterionId: {
-                    collaboratorId,
-                    cycleId,
-                    criterionId: criterion.criterionId
-                }
-            },
-            update: {
-                finalScore: finalScore,
-                finalizedById: committeeMemberId,
-            },
-            create: {
-              finalScore: finalScore,
+      transactionPayload.push(
+        this.prisma.finalizedEvaluation.upsert({
+          where: {
+            collaboratorId_cycleId_criterionId: {
               collaboratorId,
               cycleId,
               criterionId: criterion.criterionId,
-              finalizedById: committeeMemberId,
             },
-        }));
+          },
+          update: {
+            finalScore: finalScore,
+            finalizedById: committeeMemberId,
+          },
+          create: {
+            finalScore: finalScore,
+            collaboratorId,
+            cycleId,
+            criterionId: criterion.criterionId,
+            finalizedById: committeeMemberId,
+          },
+        }),
+      );
     }
 
     await this.prisma.$transaction(transactionPayload);
@@ -212,13 +237,23 @@ export class EqualizationService {
     this.logger.log(`[BRUTAL FACTS] Iniciando processo para colaborador: ${collaborator.name}`);
     if (collaborator.leader) {
       this.logger.log(`[BRUTAL FACTS] Mentor/Líder encontrado: ${collaborator.leader.name}`);
-      
+
       const consolidatedData = await this.getConsolidatedView(collaboratorId, cycleId);
       this.logger.log('[BRUTAL FACTS] Dados consolidados para a IA foram recolhidos.');
 
       const brutalFacts = await this.genAIService.extractBrutalFacts(consolidatedData);
       this.logger.log(`[BRUTAL FACTS] Texto gerado pela IA: "${brutalFacts.substring(0, 100)}..."`);
-      
+
+      await this.prisma.aISummary.create({
+        data: {
+          summaryType: 'BRUTAL_FACTS',
+          content: brutalFacts,
+          collaboratorId: collaboratorId,
+          cycleId: cycleId,
+          generatedById: committeeMemberId,
+        },
+      });
+
       this.logger.log(`[BRUTAL FACTS] A chamar NotificationsService para enviar email para: ${collaborator.leader.email}`);
       await this.notificationsService.sendBrutalFactsToMentor(
         collaborator.leader,
@@ -227,7 +262,6 @@ export class EqualizationService {
         cycle.name,
       );
       this.logger.log('[BRUTAL FACTS] Chamada ao NotificationsService concluída.');
-
     } else {
       this.logger.warn(`[BRUTAL FACTS] Processo abortado. O colaborador ${collaborator.name} não possui um líder/mentor associado.`);
     }
