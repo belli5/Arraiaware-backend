@@ -1,10 +1,12 @@
-import { Controller, Get, Param, ParseUUIDPipe, Res, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
+import { GetEvaluationsQueryDto } from 'src/rh/dto/get-evaluations-query.dto';
+import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
 
 @ApiTags('Committee')
 @Controller('api/committee')
@@ -42,5 +44,37 @@ export class CommitteeController {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     res.send(buffer);
+  }
+
+  @Get('panel')
+  @Roles(UserType.ADMIN, UserType.RH)
+  @ApiOperation({ summary: 'Painel do comitê para visualizar e editar avaliações consolidadas' })
+  @ApiResponse({ status: 200, description: 'Dados do painel retornados com sucesso.' })
+  @ApiQuery({ name: 'cycleId', required: false, description: 'ID do ciclo para filtrar. Se não, usa o mais recente.' })
+  @ApiQuery({ name: 'search', required: false, description: 'Filtra por nome do colaborador.' })
+  getCommitteePanel(@Query() query: GetEvaluationsQueryDto) {
+    return this.committeeService.getCommitteePanel(query);
+  }
+
+  @Patch('panel/:evaluationId')
+  @Roles(UserType.ADMIN, UserType.RH)
+  @ApiOperation({ summary: 'Atualiza a nota final e observação de uma avaliação pelo comitê' })
+  @ApiResponse({ status: 200, description: 'Avaliação atualizada com sucesso.' })
+  updateCommitteeEvaluation(
+    @Param('evaluationId') evaluationId: string,
+    @Body() dto: UpdateCommitteeEvaluationDto,
+    @Req() request,
+  ) {
+    const committeeMemberId = request.user.id;
+    return this.committeeService.updateCommitteeEvaluation(evaluationId, dto, committeeMemberId);
+  }
+
+  @Get('panel/:evaluationId/summary')
+  @Roles(UserType.ADMIN, UserType.RH)
+  @ApiOperation({ summary: 'Gera ou obtém o resumo de IA para uma avaliação específica' })
+  @ApiResponse({ status: 200, description: 'Resumo retornado com sucesso.' })
+  @ApiResponse({ status: 429, description: 'Cota da API de IA excedida.' })
+  getAiSummary(@Param('evaluationId') evaluationId: string) {
+    return this.committeeService.getSingleAiSummary(evaluationId);
   }
 }
