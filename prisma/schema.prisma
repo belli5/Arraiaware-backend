@@ -34,6 +34,8 @@ model User {
   finalizedEvaluationsAsFinalizer    FinalizedEvaluation[] @relation("FinalizedEvaluationsAsFinalizer")
   logsAsCollaborator                 EqualizationLog[]     @relation("LogsAsCollaborator")
   logsAsChanger                      EqualizationLog[]     @relation("LogsAsChanger")
+  collaboratorSummaries AISummary[] @relation("CollaboratorSummaries")
+  generatedSummaries    AISummary[] @relation("GeneratorOfSummaries")
 }
 
 model Project {
@@ -94,7 +96,8 @@ model EvaluationCycle {
   projects             Project[]
   leaderEvaluations    LeaderEvaluation[]
   finalizedEvaluations  FinalizedEvaluation[] 
-  equalizationLogs      EqualizationLog[]     
+  equalizationLogs      EqualizationLog[]
+  aiSummaries AISummary[]     
 }
 
 model SelfEvaluation {
@@ -204,4 +207,17 @@ model EqualizationLog {
   changedBy       User            @relation("LogsAsChanger", fields: [changedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   collaborator    User            @relation("LogsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   cycle           EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+model AISummary {
+  id             String   @id @default(uuid())
+  summaryType    String
+  content        String   
+  collaborator   User     @relation("CollaboratorSummaries", fields: [collaboratorId], references: [id], onDelete: Cascade)
+  collaboratorId String
+  cycle          EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId        String
+  generatedBy    User     @relation("GeneratorOfSummaries", fields: [generatedById], references: [id])
+  generatedById  String
+  createdAt      DateTime @default(now())
 }
