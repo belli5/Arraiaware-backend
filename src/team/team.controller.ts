@@ -1,7 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { TeamInfoDto, TeamMemberDto } from './dto/team-info.dto'; // Importação correta
+import { TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
 import { TeamService } from './team.service';
 
 @ApiTags('Teams')
