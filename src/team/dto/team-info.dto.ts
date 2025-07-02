@@ -18,6 +18,9 @@ export class TeamInfoDto {
   @ApiProperty()
   projectName: string;
 
+  @ApiProperty({ example: 'Carlos Mendes' })
+  managerName: string;
+
   @ApiProperty({ type: [TeamMemberDto] })
   collaborators: TeamMemberDto[];
 }
