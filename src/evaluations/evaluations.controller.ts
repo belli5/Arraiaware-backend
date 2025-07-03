@@ -9,6 +9,7 @@ import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { EvaluationsService } from './evaluations.service';
 import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
+import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
 
 @ApiTags('Evaluations')
 @Controller('api/evaluations')
@@ -41,6 +42,14 @@ export class EvaluationsController {
   @ApiResponse({ status: 201, description: 'Avaliação de líder submetida com sucesso.' })
   submitLeaderEvaluation(@Body() dto: SubmitLeaderEvaluationDto) {
     return this.evaluationsService.submitLeaderEvaluation(dto);
+  }
+
+  @Post('leader-feedback')
+  @ApiOperation({ summary: 'Submeter uma avaliação de um liderado para seu líder' })
+  @ApiResponse({ status: 201, description: 'Avaliação de líder submetida com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Colaborador ou líder não encontrado.' })
+  submitDirectReportEvaluation(@Body() dto: SubmitDirectReportEvaluationDto) {
+    return this.evaluationsService.submitDirectReportEvaluation(dto);
   }
 
   @Get('self/:userId')
