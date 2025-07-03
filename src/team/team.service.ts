@@ -25,6 +25,7 @@ export class TeamService {
         },
         manager: {
           select: {
+            id: true, 
             name: true,
           },
         },
@@ -44,6 +45,7 @@ export class TeamService {
     return {
       projectId: project.id,
       projectName: project.name,
+      managerId:   project.manager.id, 
       managerName: project.manager.name,
       collaborators: teamMates,
     };
