@@ -439,12 +439,53 @@ export class RhService {
                 const generalScore = Number(record.generalScore) || 0;
                 totalScore += generalScore;
                 scoreCount++;
+                let projectId: string | undefined = undefined;
+
+                if (record.project) {
+                    const projectName = record.project.trim();
+                    const existingProject = await this.prisma.project.findFirst({ where: { name: projectName, cycleId: cycle.id }});
+
+                    if (existingProject) {
+                        projectId = existingProject.id;
+                        const projectWithCollabs = await this.prisma.project.findUnique({
+                            where: { id: projectId },
+                            include: { collaborators: { select: { id: true } } },
+                        });
+                        const allCollaboratorIds = new Set(projectWithCollabs.collaborators.map(c => c.id));
+                        allCollaboratorIds.add(userId);
+                        allCollaboratorIds.add(evaluatorUserId);
+
+                        await this.prisma.project.update({
+                            where: { id: projectId },
+                            data: {
+                                collaborators: {
+                                    set: Array.from(allCollaboratorIds).map(id => ({ id })),
+                                },
+                            },
+                        });
+                    } else {
+                        const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' } });
+                        if (adminUser) {
+                            const newProject = await this.prisma.project.create({
+                                data: {
+                                    name: projectName,
+                                    cycle: { connect: { id: cycle.id } },
+                                    manager: { connect: { id: adminUser.id } },
+                                    collaborators: { connect: [{ id: userId }, { id: evaluatorUserId }] },
+                                }
+                            });
+                            projectId = newProject.id;
+                        }
+                    }
+                }
+
                 await this.prisma.peerEvaluation.create({ 
                   data: { 
                     evaluatedUserId: userId, 
                     evaluatorUserId, 
                     cycleId: cycle.id, 
-                    project: record.project, 
+                    project: record.project,
+                    projectId: projectId,
                     motivatedToWorkAgain: record.motivatedToWorkAgain, 
                     generalScore, 
                     pointsToImprove: record.pointsToImprove || 'N/A', 
