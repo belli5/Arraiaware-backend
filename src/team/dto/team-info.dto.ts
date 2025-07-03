@@ -18,6 +18,9 @@ export class TeamInfoDto {
   @ApiProperty()
   projectName: string;
 
+  @ApiProperty({ format: 'uuid' }) 
+  managerId: string;
+
   @ApiProperty({ example: 'Carlos Mendes' })
   managerName: string;
 
