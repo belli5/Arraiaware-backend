@@ -1,7 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsArray, IsUUID, ValidateNested } from 'class-validator';
-import { EvaluationItemDto } from './evaluation-item.dto';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
 export class SubmitLeaderEvaluationDto {
   @ApiProperty({ description: 'ID do líder que está realizando a avaliação' })
@@ -16,9 +14,32 @@ export class SubmitLeaderEvaluationDto {
   @IsUUID()
   cycleId: string;
 
-  @ApiProperty({ type: [EvaluationItemDto], description: 'Lista das avaliações por critério' })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => EvaluationItemDto)
-  evaluations: EvaluationItemDto[];
+  @ApiProperty({ description: 'Nota para "Qualidade e pontualidade das entregas"', minimum: 1, maximum: 5 })
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  deliveryScore: number;
+
+  @ApiProperty({ description: 'Nota para "Proatividade e iniciativa na resolução de problemas"', minimum: 1, maximum: 5 })
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  proactivityScore: number;
+
+  @ApiProperty({ description: 'Nota para "Colaboração e trabalho em equipe"', minimum: 1, maximum: 5 })
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  collaborationScore: number;
+
+  @ApiProperty({ description: 'Nota para "Habilidades técnicas e de negócio"', minimum: 1, maximum: 5 })
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  skillScore: number;
+
+  @ApiPropertyOptional({ description: 'Justificativa ou observações gerais sobre o desempenho' })
+  @IsString()
+  @IsOptional()
+  justification?: string;
 }
