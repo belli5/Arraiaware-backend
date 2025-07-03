@@ -205,7 +205,7 @@ export class UsersService {
     return { message: `Uma nova senha temporária foi enviada para o e-mail ${user.email}.` };
   }
 
-    async getEvaluationHistory(userId: string, cycleId: string) {
+  async getEvaluationHistory(userId: string, cycleId: string) {
     await this.findOne(userId);
 
     const selfEvaluation = this.prisma.selfEvaluation.findMany({
@@ -221,7 +221,6 @@ export class UsersService {
     const leaderEvaluations = this.prisma.leaderEvaluation.findMany({
       where: { collaboratorId: userId, cycleId },
       include: {
-        criterion: true,
         leader: { select: { id: true, name: true } },
       },
     });
