@@ -5,7 +5,7 @@ import { Response } from 'express';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
-import { GetEvaluationsQueryDto } from 'src/rh/dto/get-evaluations-query.dto';
+import { User } from '@prisma/client';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 
@@ -68,12 +68,11 @@ export class CommitteeController {
     return this.committeeService.updateCommitteeEvaluation(evaluationId, dto, committeeMemberId);
   }
 
-  @Get('panel/:evaluationId/summary')
+  @Get('evaluation/:evaluationId/summary')
   @Roles(UserType.ADMIN, UserType.RH)
-  @ApiOperation({ summary: 'Gera ou obtém o resumo de IA para uma avaliação específica' })
-  @ApiResponse({ status: 200, description: 'Resumo retornado com sucesso.' })
-  @ApiResponse({ status: 429, description: 'Cota da API de IA excedida.' })
-  getAiSummary(@Param('evaluationId') evaluationId: string) {
-    return this.committeeService.getSingleAiSummary(evaluationId);
+  @ApiOperation({ summary: 'Obtém (ou gera) o resumo de IA para uma avaliação específica' })
+  async getSingleAiSummary(@Param('evaluationId') evaluationId: string, @Req() request) {
+    const requestor = request.user as User;
+    return this.committeeService.getSingleAiSummary(evaluationId, requestor);
   }
 }
