@@ -1,81 +1,185 @@
-# RPE - Rocket Performance & Engagement (Backend)
+
+# 🚀 RPE - Rocket Performance & Engagement (Backend)
 
 ![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=prisma&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
 
-Backend da plataforma RPE, uma solução digital completa para centralizar e automatizar a avaliação de desempenho dos colaboradores da Rocket Corp.
+Backend da plataforma RPE, uma solução digital completa para centralizar e automatizar a avaliação de desempenho e o engajamento dos colaboradores da Rocket Corp.
 
-> Novo por aqui? Confira o guia de [ONBOARDING](docs/ONBOARDING.md) para começar!
+---
+
+## 👋 Novo por aqui?
+
+Confira o **guia de ONBOARDING** para começar!
+
+---
 
 ## 🎯 Sobre o Projeto
 
- A empresa Rocket Corp enfrenta desafios com seu processo de avaliação de desempenho, que é manual, fragmentado e suscetível a vieses.  Gestores relatam dificuldades em consolidar feedbacks e comparar desempenhos de forma estruturada.  A ausência de uma plataforma integrada dificulta a análise de dados e a tomada de decisões estratégicas sobre promoções e treinamentos.
+A empresa **Rocket Corp** enfrenta desafios com seu processo de avaliação de desempenho, que é **manual, fragmentado e suscetível a vieses**. A ausência de uma plataforma integrada dificulta a análise de dados e a tomada de decisões estratégicas sobre promoções e treinamentos.
 
- O **RPE (Rocket Performance and Engagement)** foi criado para resolver esses problemas, oferecendo uma abordagem estruturada e baseada em dados que garante avaliações mais justas, eficientes e alinhadas com os objetivos da organização.
+O **RPE (Rocket Performance and Engagement)** foi criado para resolver esses problemas, oferecendo uma **abordagem estruturada e baseada em dados**, que garante avaliações mais justas, eficientes e alinhadas com os objetivos da organização.
 
-## ✨ Funcionalidades (MVP 1 Concluído)
+---
 
- Este repositório contém o backend com as funcionalidades essenciais do **MVP 1 - Digitalização Básica do Processo**:
+## ✨ Funcionalidades
 
-*  **Gestão de Usuários (Colaboradores):** CRUD completo para colaboradores, gestores e outros perfis.
-* **Segurança:** Hashing de senhas com `bcrypt` para armazenamento seguro.
-*  **Gestão de Cargos/Trilhas (Roles):** CRUD para gerenciar os diferentes papéis na empresa, permitindo a configuração de critérios por cargo/trilha/unidade.
-*  **Gestão de Critérios de Avaliação:** CRUD para os critérios de `Comportamento`, `Execução` e `Gestão`.
-* **Gestão de Ciclos de Avaliação:** Permite ao RH abrir e fechar os períodos de avaliação.
-*  **Submissão de Avaliações:** Endpoints para que os colaboradores possam submeter suas autoavaliações [cite: 22] , avaliações de pares/líderes   e indicações de referência.
-* **Validação de Dados:** Uso de DTOs com `class-validator` para garantir a integridade dos dados de entrada.
-* **Documentação de API:** Geração automática de uma documentação interativa com Swagger (OpenAPI).
+A plataforma evoluiu para além do MVP inicial e agora conta com um ecossistema robusto de módulos para uma **gestão de performance completa**:
+
+### 🧩 Módulos Principais
+
+- **Gestão de Usuários (Users):**
+  - CRUD completo para colaboradores, gestores e administradores.
+  - Sistema de tipos de usuário (`COLABORADOR`, `GESTOR`, `RH`, `ADMIN`).
+
+- **Autenticação e Segurança (Auth):**
+  - Autenticação baseada em **JWT** (`passport-jwt`).
+  - Hashing de senhas com **bcrypt** para segurança.
+
+- **Gestão de Cargos e Trilhas (Roles):**
+  - CRUD para papéis e trilhas de desenvolvimento.
+  - Permite associar critérios específicos por cargo/trilha.
+
+- **Gestão de Critérios (Criteria):**
+  - CRUD para critérios de avaliação.
+  - Sistema de pilares: **Comportamento**, **Execução**, **Gestão**, **Liderança**.
+  - Suporte para atualização em massa via planilhas XLSX.
+
+- **Gestão de Ciclos (Cycles):**
+  - Criação, gerenciamento e fechamento de ciclos de avaliação.
+
+---
+
+### 📈 Processo de Avaliação
+
+- **Submissão de Avaliações (Evaluations):**
+  - Autoavaliação baseada em critérios.
+  - Avaliação 360° (pares, líderes).
+  - Feedback de liderados.
+  - Indicação de referências.
+
+- **Gestão de Projetos e Times (Projects & Team):**
+  - Criação de projetos e associação de colaboradores.
+  - Facilita avaliação de pares no contexto de trabalho real.
+
+---
+
+### 🧑‍💼 Módulos de Gestão e RH
+
+- **Dashboard do Gestor (Dashboard):**
+  - Acompanhamento do progresso das avaliações da equipe em tempo real.
+
+- **Painel do RH (RH):**
+  - Visão global de todas as avaliações.
+  - Filtros avançados e exportação de dados.
+
+- **Importação de Dados (Import):**
+  - Importação de usuários em massa via planilhas XLSX.
+  - Importação de histórico de avaliações anteriores.
+
+- **Equalização e Comitê (Equalization & Committee):**
+  - Visualização e ajuste de notas finais por comitê.
+  - Exportação de dados consolidados para tomada de decisão.
+
+---
+
+### 🤖 Automação e Inteligência
+
+- **Sincronização com ERP (ERP):**
+  - Cron Job diário para sincronização de dados com sistema ERP externo.
+
+- **Integração com IA Generativa (GenAI):**
+  - API do **Google Gemini** utilizada para gerar resumos analíticos.
+  - Auxilia comitês e mentores nos feedbacks.
+
+- **Sistema de Notificações (Notifications):**
+  - Envio de e-mails transacionais com **Nodemailer**.
+  - Ex: Criação de conta, envio de resumo de avaliações, notificações de ciclo.
+
+---
 
 ## 🛠️ Tecnologias Utilizadas
 
-* **[NestJS](https://nestjs.com/):** Framework Node.js progressivo para construir aplicações eficientes e escaláveis.
-* **[Prisma](https://www.prisma.io/):** ORM de última geração para Node.js e TypeScript.
-* **[TypeScript](https://www.typescriptlang.org/):** Superset do JavaScript que adiciona tipagem estática.
-* **[SQLite](https://www.sqlite.org/index.html):** Banco de dados relacional para o ambiente de desenvolvimento.
-* **[Swagger (OpenAPI)](https://swagger.io/):** Para documentação e teste de API.
-* **[Bcrypt](https://www.npmjs.com/package/bcrypt):** Para hashing de senhas.
-* **[pnpm](https://pnpm.io/):** Gerenciador de pacotes rápido e eficiente.
+| Categoria           | Tecnologia            |
+|---------------------|------------------------|
+| Framework           | NestJS                |
+| ORM                 | Prisma                |
+| Linguagem           | TypeScript            |
+| Banco de Dados (Dev)| SQLite                |
+| Documentação        | Swagger (OpenAPI)     |
+| Segurança           | Bcrypt, Passport.js   |
+| IA Generativa       | Google AI (Gemini)    |
+| E-mails             | Nodemailer            |
+| Gerenciador de Pacotes | pnpm              |
+
+---
 
 ## 🚀 Começando
 
-Siga estas instruções para obter uma cópia do projeto e executá-la em sua máquina local para desenvolvimento e testes.
+### ✅ Pré-requisitos
 
-### Pré-requisitos
+- [Node.js](https://nodejs.org/) (versão 18 ou superior)
+- [pnpm](https://pnpm.io/) instalado globalmente:
+  ```bash
+  npm install -g pnpm
+  ```
 
-* [Node.js](https://nodejs.org/en/) (versão 18 ou superior)
-* [pnpm](https://pnpm.io/installation)
+---
 
-### Instalação
+### 📦 Instalação
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/belli5/Arraiaware-backend.git
-    ```
-    ```bash
-    cd Arraiaware-backend
-    ```
+Clone o repositório:
 
-2.  **Instale as dependências:**
-    ```bash
-    pnpm install
-    ```
+```bash
+git clone https://github.com/belli5/Arraiaware-backend.git
+cd Arraiaware-backend
+```
 
-3.  **Execute as migrações do banco de dados:**
-    Este comando irá criar o banco de dados SQLite e aplicar todas as tabelas necessárias com base no `schema.prisma`.
-    ```bash
-    pnpm prisma migrate dev
-    ```
+Crie e configure o arquivo `.env`:
 
-## ධ Executando a Aplicação
+```bash
+cp .env.example .env
+```
 
-Para iniciar o servidor em modo de desenvolvimento com hot-reload:
+Edite o `.env` com:
+
+- Credenciais do banco de dados
+- Chave secreta JWT
+- Chave da API do Gemini
+
+Instale as dependências:
+
+```bash
+pnpm install
+```
+
+Execute as migrações do banco de dados:
+
+```bash
+pnpm prisma migrate dev
+```
+
+---
+
+### ▶️ Executando a Aplicação
+
+Inicie o servidor em modo desenvolvimento (hot-reload):
+
 ```bash
 pnpm start:dev
 ```
 
-A aplicação estará disponível em:
-```bash
-http://localhost:3000/api-docs
-```
+- A aplicação estará disponível em: [http://localhost:3000](http://localhost:3000)
+- Documentação Swagger: [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
+- Simulador de E-mails (MailHog): veja `docker-compose.yml` para acesso ao painel.
+
+---
+
+## 🧑‍💻 Autoria
+
+Desenvolvido por **Arraiware Team** 🚀
+
+---
+
