@@ -4,6 +4,7 @@ import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
+import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
 
 @Injectable()
 export class EvaluationsService {
@@ -123,35 +124,35 @@ export class EvaluationsService {
   return evaluations;
 }
   async submitLeaderEvaluation(dto: SubmitLeaderEvaluationDto) {
-    const { leaderId, collaboratorId, cycleId, evaluations } = dto;
+    const { collaboratorId, leaderId, cycleId, ...scores } = dto;
 
-    const dataToCreate = evaluations.map((ev) => ({
-      leaderId,
-      collaboratorId,
-      cycleId,
-      criterionId: ev.criterionId,
-      score: ev.score,
-      justification: ev.justification,
-      submissionStatus: 'Concluído', 
-    }));
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [collaboratorId, leaderId] } },
+    });
+    if (users.length !== 2) {
+      throw new NotFoundException('Colaborador ou líder não encontrado.');
+    }
 
-    return this.prisma.$transaction(
-      dataToCreate.map(data =>
-        this.prisma.leaderEvaluation.upsert({
-          where: {
-            leaderId_collaboratorId_cycleId_criterionId: {
-              leaderId: data.leaderId,
-              collaboratorId: data.collaboratorId,
-              cycleId: data.cycleId,
-              criterionId: data.criterionId,
-            },
-          },
-          update: data,
-          create: data,
-        }),
-      ),
-    );
+    return this.prisma.leaderEvaluation.upsert({
+      where: {
+        leaderId_collaboratorId_cycleId: {
+          leaderId,
+          collaboratorId,
+          cycleId,
+        },
+      },
+      update: {
+        ...scores,
+      },
+      create: {
+        leaderId,
+        collaboratorId,
+        cycleId,
+        ...scores,
+      },
+    });
   }
+
   async findPeerEvaluationsDoneByUser(evaluatorUserId: string, cycleId: string) {
     return this.prisma.peerEvaluation.findMany({
       where: { evaluatorUserId, cycleId },
@@ -166,6 +167,36 @@ export class EvaluationsService {
       where: { indicatorUserId, cycleId },
       include: {
         indicatedUser: { select: { id: true, name: true } }, 
+      },
+    });
+  }
+
+    async submitDirectReportEvaluation(dto: SubmitDirectReportEvaluationDto) {
+    const { collaboratorId, leaderId, cycleId, ...scores } = dto;
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [collaboratorId, leaderId] } },
+    });
+    if (users.length !== 2) {
+      throw new NotFoundException('Colaborador ou líder não encontrado.');
+    }
+
+    return this.prisma.directReportEvaluation.upsert({
+      where: {
+        collaboratorId_leaderId_cycleId: {
+          collaboratorId,
+          leaderId,
+          cycleId,
+        },
+      },
+      update: {
+        ...scores,
+      },
+      create: {
+        collaboratorId,
+        leaderId,
+        cycleId,
+        ...scores,
       },
     });
   }
