@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
+import { ManagedTeamDto, TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
 
 @Injectable()
 export class TeamService {
@@ -25,7 +25,13 @@ export class TeamService {
         },
         manager: {
           select: {
-            id: true, 
+            id: true,
+            name: true,
+          },
+        },
+        cycle: {
+          select: {
+            id: true,
             name: true,
           },
         },
@@ -45,32 +51,51 @@ export class TeamService {
     return {
       projectId: project.id,
       projectName: project.name,
-      managerId:   project.manager.id, 
+      cycleId: project.cycle.id,
+      cycleName: project.cycle.name,
+      managerId: project.manager.id,
       managerName: project.manager.name,
       collaborators: teamMates,
     };
   }
 
-  async getTeamByManager(managerId: string): Promise<TeamMemberDto[]> {
-    const manager = await this.prisma.user.findUnique({
-      where: { id: managerId },
+  async getTeamByManager(managerId: string): Promise<ManagedTeamDto[]> {
+    const projects = await this.prisma.project.findMany({
+      where: {
+        managerId: managerId,
+      },
+      include: {
+        collaborators: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        cycle: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        name: 'asc',
+      }
     });
 
-    if (!manager) {
-      throw new NotFoundException(`Gestor com ID ${managerId} não encontrado.`);
+    if (!projects || projects.length === 0) {
+      throw new NotFoundException(
+        `Nenhum projeto encontrado para o gestor com ID ${managerId}.`,
+      );
     }
 
-    const teamMembers = await this.prisma.user.findMany({
-      where: {
-        leaderId: managerId,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    });
-
-    return teamMembers;
+    return projects.map(project => ({
+      projectId: project.id,
+      projectName: project.name,
+      cycleId: project.cycle.id,
+      cycleName: project.cycle.name,
+      collaborators: project.collaborators,
+    }));
   }
 }
