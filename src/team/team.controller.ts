@@ -1,8 +1,10 @@
 import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
+import { ManagedTeamDto, TeamInfoDto, TeamMemberDto } from './dto/team-info.dto';
 import { TeamService } from './team.service';
+import { Roles } from 'src/auth/roles.decorator';
+import { UserType } from '@prisma/client';
 
 @ApiTags('Teams')
 @Controller('api/teams')
@@ -29,19 +31,11 @@ export class TeamController {
   }
 
   @Get('manager/:managerId')
-  @ApiOperation({ summary: 'Obter os liderados diretos de um gestor' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de liderados retornada com sucesso.',
-    type: [TeamMemberDto], 
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Gestor não encontrado.',
-  })
-  async getTeamByManager(
-    @Param('managerId', ParseUUIDPipe) managerId: string,
-  ): Promise<TeamMemberDto[]> {
+  @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR)
+  @ApiOperation({ summary: 'Obtém a lista de projetos e seus membros gerenciados por um gestor' })
+  @ApiResponse({ status: 200, description: 'Lista de times gerenciados retornada com sucesso.', type: [ManagedTeamDto] }) // Use o DTO correto aqui
+  @ApiResponse({ status: 404, description: 'Gestor ou projetos não encontrados.' })
+  async getTeamByManager(@Param('managerId', ParseUUIDPipe) managerId: string): Promise<ManagedTeamDto[]> {
     return this.teamService.getTeamByManager(managerId);
   }
 }
