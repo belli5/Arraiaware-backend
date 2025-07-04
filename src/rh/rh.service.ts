@@ -378,6 +378,7 @@ export class RhService {
       let determinedUserType: UserType = UserType.COLABORADOR;
       const selfEvals = records.filter(r => r.evaluationType === 'SELF');
 
+
       const isManager = selfEvals.some(r => 
         (r.criterionName?.includes('Gestão de Pessoas*') || 
          r.criterionName?.includes('Gestão de Projetos*') || 
@@ -509,7 +510,7 @@ export class RhService {
                 if (existingProject) {
                   projectId = existingProject.id;
                   
-          
+            
                   if (determinedUserType === UserType.GESTOR) {
                     await this.prisma.project.update({
                       where: { id: projectId },
@@ -518,7 +519,7 @@ export class RhService {
                     this.logger.log(`Usuário ${userEmail} definido como GESTOR do projeto ${projectName}`);
                   }
                 } else {
-              
+                 
                   const newManagerId = determinedUserType === UserType.GESTOR 
                     ? userId 
                     : adminUser?.id;
