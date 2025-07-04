@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
-import { HistoryItemDto, ImportHistoryDto } from './dto/import-history.dto';
+import { HistoryItemDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
 
 @Injectable()
@@ -251,26 +251,27 @@ export class RhService {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
 
+    // Nova lógica: agrupa registros por usuário
+    const allRecordsByUser = new Map<string, HistoryItemDto[]>();
     const results = [];
+
     for (const file of files) {
       let status = 'Sucesso';
-      let importResult;
+      let extractedRecords = 0;
       try {
         this.logger.log(`Processando arquivo: ${file.originalname}`);
-        const allRecords = this.extractHistoryRecordsFromFile(file);
+        const records = this.extractHistoryRecordsFromFile(file);
+        extractedRecords = records.length;
 
-        if (allRecords.length === 0) {
-          this.logger.warn(`Nenhum registro de histórico válido foi extraído do arquivo ${file.originalname}.`);
-          importResult = { message: "Nenhum registro válido encontrado.", errors: [], processed: 0, skipped: 0, createdUsers: 0 };
+        if (records.length > 0) {
+          const userEmail = records[0].userEmail;
+          if (!allRecordsByUser.has(userEmail)) {
+            allRecordsByUser.set(userEmail, []);
+          }
+          allRecordsByUser.get(userEmail).push(...records);
         } else {
-          this.logger.log(`Extraídos ${allRecords.length} registros de ${file.originalname}.`);
-          importResult = await this.importHistory({ records: allRecords });
+          this.logger.warn(`Nenhum registro de histórico válido foi extraído do arquivo ${file.originalname}.`);
         }
-
-        if (importResult.errors.length > 0) {
-          status = importResult.processed > 0 ? 'Falha Parcial' : 'Falha Total';
-        }
-        results.push({ file: file.originalname, ...importResult });
 
       } catch (error) {
         status = 'Falha Total';
@@ -280,9 +281,19 @@ export class RhService {
         await this.prisma.importHistory.create({
           data: { fileName: file.originalname, status: status, file: file.buffer },
         });
-        this.logger.log(`Arquivo ${file.originalname} processado com status: ${status}`);
+        this.logger.log(`Arquivo ${file.originalname} processado com status: ${status}. Registros extraídos: ${extractedRecords}`);
       }
     }
+
+    // Processa todos os registros agrupados por usuário
+    if (allRecordsByUser.size > 0) {
+      const importResult = await this.importHistory(allRecordsByUser);
+      results.push({
+        file: 'Processamento consolidado',
+        ...importResult
+      });
+    }
+
     return results;
   }
   
@@ -290,11 +301,12 @@ export class RhService {
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     const findValue = (row: any, keys: string[]) => {
       for (const key in row) {
-        const normalizedKey = key.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normalizedKey = key.trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
         if (keys.some(searchKey => normalizedKey.includes(searchKey.toLowerCase().replace(/[^a-z0-9]/g, '')))) return row[key];
       }
       return undefined;
     };
+
     const profileSheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('perfil'));
     if (!profileSheetName) {
       this.logger.warn(`Arquivo ${file.originalname} não contém a aba 'Perfil'. Pulando.`);
@@ -314,287 +326,303 @@ export class RhService {
       this.logger.warn(`Não foi possível extrair e-mail ou nome do ciclo da aba 'Perfil' em ${file.originalname}.`);
       return [];
     }
+    
     const allRecords: HistoryItemDto[] = [];
     for (const sheetName of workbook.SheetNames) {
-      const normalizedSheetName = sheetName.toLowerCase();
+      // Melhora na verificação de abas relevantes
+      if (!['autoavaliação', 'avaliação 360', 'pesquisa de referências', '360'].some(term => sheetName.toLowerCase().includes(term))) {
+        continue;
+      }
 
       const sheet = workbook.Sheets[sheetName];
       const rows: any[] = XLSX.utils.sheet_to_json(sheet);
       if (rows.length === 0) continue;
 
-      if (normalizedSheetName.includes('autoavaliação')) {
-        this.logger.log(`Processando aba de Autoavaliação: "${sheetName}"`);
-        rows.forEach(row =>
-          allRecords.push({
-            userEmail,
-            cycleName: cycleName.toString(),
-            evaluationType: 'SELF',
-            criterionName: findValue(row, ['critério']),
-            score: findValue(row, ['auto-avaliação']),
-            scoreDescription: findValue(row, ['descrição nota']),
-            justification: findValue(row, ['dados e fatos']),
-            unidade, 
-          }),
-        );
-      } else if (normalizedSheetName.includes('360')) {
-        this.logger.log(`Processando aba de Avaliação 360: "${sheetName}"`);
-        rows.forEach(row =>
-          allRecords.push({
-            userEmail,
-            cycleName: cycleName.toString(),
-            evaluationType: 'PEER',
-            evaluatorEmail: findValue(row, ['email do avaliado']),
-            project: findValue(row, ['projeto em que atuaram juntos']),
-            motivatedToWorkAgain: findValue(row, ['motivado em trabalhar novamente']),
-            generalScore: findValue(row, ['nota geral']),
-            pointsToImprove: findValue(row, ['pontos que deve melhorar']),
-            pointsToExplore: findValue(row, ['pontos que faz bem']),
-            unidade,
-          }),
-        );
-      } else if (normalizedSheetName.includes('referências')) {
-        this.logger.log(`Processando aba de Pesquisa de Referências: "${sheetName}"`);
-        rows.forEach(row =>
-          allRecords.push({
-            userEmail,
-            cycleName: cycleName.toString(),
-            evaluationType: 'REFERENCE',
-            indicatedEmail: findValue(row, ['email da referência']),
-            justification: findValue(row, ['justificativa']),
-            unidade,
-          }),
-        );
-      }
+      const normalizedSheetName = sheetName.toLowerCase();
+      
+      rows.forEach(row => {
+        let record: Partial<HistoryItemDto> = {
+          userEmail,
+          cycleName: cycleName.toString(),
+          unidade,
+        };
+
+        if (normalizedSheetName.includes('autoavaliação')) {
+          record.evaluationType = 'SELF';
+          record.criterionName = findValue(row, ['critério']);
+          record.score = Number(findValue(row, ['auto-avaliação', 'autoavaliacao']));
+          record.scoreDescription = findValue(row, ['descrição nota', 'descriçãonota']);
+          record.justification = findValue(row, ['dados e fatos']);
+        } else if (normalizedSheetName.includes('360')) {
+          record.evaluationType = 'PEER';
+          record.evaluatorEmail = findValue(row, ['email do avaliado', 'emaildoavaliado']);
+          record.project = findValue(row, ['projeto em que atuaram juntos']);
+          record.motivatedToWorkAgain = findValue(row, ['motivado em trabalhar novamente']);
+          record.generalScore = Number(findValue(row, ['nota geral']));
+          record.pointsToImprove = findValue(row, ['pontos que deve melhorar']);
+          record.pointsToExplore = findValue(row, ['pontos que faz bem']);
+        } else if (normalizedSheetName.includes('referências')) {
+          record.evaluationType = 'REFERENCE';
+          record.indicatedEmail = findValue(row, ['email da referência']);
+          record.justification = findValue(row, ['justificativa']);
+        }
+
+        if (record.evaluationType) {
+          allRecords.push(record as HistoryItemDto);
+        }
+      });
     }
     this.logger.log(`Extração para ${file.originalname} concluída. Total de ${allRecords.length} registros encontrados.`);
     return allRecords;
   }
 
-  async importHistory(importData: ImportHistoryDto) {
+  async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
     let processedCount = 0;
     let createdUserCount = 0;
     let skippedCount = 0;
     const errors = [];
 
-    const recordsByCollaboratorAndCycle = new Map<string, HistoryItemDto[]>();
-
-    for (const record of importData.records) {
-      const key = `${record.userEmail}-${record.cycleName}`;
-      if (!recordsByCollaboratorAndCycle.has(key)) {
-        recordsByCollaboratorAndCycle.set(key, []);
-      }
-      recordsByCollaboratorAndCycle.get(key)!.push(record);
-    }
-  
-    for (const [key, records] of recordsByCollaboratorAndCycle.entries()) {
+    for (const [userEmail, records] of allRecordsByUser.entries()) {
       try {
-        const [userEmail, cycleName] = key.split('-');
-        if (!userEmail || !cycleName) continue;
+        // Determina o tipo de usuário baseado nas autoavaliações
+        let determinedUserType: UserType = UserType.COLABORADOR;
+        const selfEvals = records.filter(r => r.evaluationType === 'SELF');
 
-        const { id: userId, wasCreated: userWasCreated, leaderId } = await this.findOrCreateUser(userEmail, records[0].unidade);
+        const isManager = selfEvals.some(r => 
+          (r.criterionName?.includes('Gestão de Pessoas*') || 
+           r.criterionName?.includes('Gestão de Projetos*') || 
+           r.criterionName?.includes('Gestão Organizacional*'))
+          && r.scoreDescription !== 'Não se Aplica'
+        );
+        
+        const isRh = selfEvals.some(r => 
+          (r.criterionName?.includes('Novos Clientes**') || 
+           r.criterionName?.includes('Novos Projetos**') || 
+           r.criterionName?.includes('Novos Produtos ou Serviços**'))
+          && r.scoreDescription !== 'Não se Aplica'
+        );
+
+        if (isRh) {
+          determinedUserType = UserType.RH;
+        } else if (isManager) {
+          determinedUserType = UserType.GESTOR;
+        }
+
+        this.logger.log(`Perfil final determinado para ${userEmail}: ${determinedUserType}`);
+        
+        const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(userEmail, determinedUserType, records[0].unidade);
         if (userWasCreated) createdUserCount++;
-
-        const cycle = await this.prisma.evaluationCycle.upsert({
-          where: { name: cycleName.toString() },
-          update: {},
-          create: { name: cycleName.toString(), startDate: new Date(), endDate: new Date(), status: 'Fechado' },
-        });
-
-        let totalScore = 0;
-        let scoreCount = 0;
-        let hasSelfEvaluation = false;
-        let hasPeerEvaluation = false;
-
+        
         for (const record of records) {
-          switch (record.evaluationType) {
-            case 'SELF':
-              hasSelfEvaluation = true;
-              if (!record.criterionName) { continue; }
-              const criterion = await this.prisma.evaluationCriterion.upsert({ where: { criterionName: record.criterionName }, update: {}, create: { criterionName: record.criterionName, pillar: "Comportamento" } });
-              
-              const existingSelfEval = await this.prisma.selfEvaluation.findUnique({
-                where: { userId_cycleId_criterionId: { userId, cycleId: cycle.id, criterionId: criterion.id } }
-              });
+          try {
+            if (!record.userEmail || !record.cycleName || !record.evaluationType) {
+              errors.push(`Registro ignorado por falta de campos essenciais.`);
+              continue;
+            }
+            
+            const cycle = await this.prisma.evaluationCycle.upsert({
+              where: { name: record.cycleName.toString() },
+              update: {},
+              create: { name: record.cycleName.toString(), startDate: new Date(), endDate: new Date(), status: 'Fechado' },
+            });
 
-              if (!existingSelfEval) {
-                const score = Number(record.score) || 0;
-                totalScore += score;
-                scoreCount++;
-                await this.prisma.selfEvaluation.create({ data: { userId, cycleId: cycle.id, criterionId: criterion.id, score, justification: record.justification || 'N/A', scoreDescription: record.scoreDescription || '', submissionStatus: 'Concluído' } });
-                processedCount++;
-              } else {
-                skippedCount++;
-              }
-              break;
+            switch (record.evaluationType) {
+              case 'SELF':
+                if (!record.criterionName) {
+                  errors.push(`Registro SELF para ${record.userEmail} ignorado: 'criterionName' em falta.`);
+                  skippedCount++;
+                  continue;
+                }
+                const criterion = await this.prisma.evaluationCriterion.upsert({
+                  where: { criterionName: record.criterionName },
+                  update: {},
+                  create: { criterionName: record.criterionName, pillar: 'Comportamento' },
+                });
 
-            case 'PEER':
-              hasPeerEvaluation = true;
-              if (!record.evaluatorEmail) { continue; }
-              const { id: evaluatorUserId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(record.evaluatorEmail);
-              if (evaluatorWasCreated) createdUserCount++;
-              
-              const existingPeerEval = await this.prisma.peerEvaluation.findFirst({ where: { evaluatedUserId: userId, evaluatorUserId, cycleId: cycle.id } });
-              
-              if (!existingPeerEval) {
-                const generalScore = Number(record.generalScore) || 0;
-                totalScore += generalScore;
-                scoreCount++;
+                const existingSelfEval = await this.prisma.selfEvaluation.findUnique({
+                  where: { userId_cycleId_criterionId: { userId, cycleId: cycle.id, criterionId: criterion.id } },
+                });
+
+                if (!existingSelfEval) {
+                  await this.prisma.selfEvaluation.create({
+                    data: {
+                      userId,
+                      cycleId: cycle.id,
+                      criterionId: criterion.id,
+                      score: Number(record.score) || 0,
+                      justification: record.justification || 'N/A',
+                      scoreDescription: record.scoreDescription || '',
+                      submissionStatus: 'Concluído',
+                    },
+                  });
+                  processedCount++;
+                } else {
+                  this.logger.warn(`[DUPLICADO IGNORADO] Autoavaliação para ${record.userEmail} com critério "${record.criterionName}" já existe.`);
+                  skippedCount++;
+                }
+                break;
+
+              case 'PEER':
+                if (!record.evaluatorEmail) {
+                  errors.push(`Registro PEER para ${record.userEmail} ignorado: 'evaluatorEmail' em falta.`);
+                  skippedCount++;
+                  continue;
+                }
+                const { id: evaluatorUserId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(
+                  record.evaluatorEmail, UserType.COLABORADOR, record.unidade
+                );
+                if (evaluatorWasCreated) createdUserCount++;
+
                 let projectId: string | undefined = undefined;
 
                 if (record.project) {
-                    const projectName = record.project.trim();
-                    const existingProject = await this.prisma.project.findFirst({ where: { name: projectName, cycleId: cycle.id }});
+                  const projectName = record.project.trim();
 
-                    if (existingProject) {
-                        projectId = existingProject.id;
-                        const projectWithCollabs = await this.prisma.project.findUnique({
-                            where: { id: projectId },
-                            include: { collaborators: { select: { id: true } } },
-                        });
-                        const allCollaboratorIds = new Set(projectWithCollabs.collaborators.map(c => c.id));
-                        allCollaboratorIds.add(userId);
-                        allCollaboratorIds.add(evaluatorUserId);
+                  const existingProject = await this.prisma.project.findFirst({
+                    where: { name: projectName, cycleId: cycle.id },
+                  });
 
-                        await this.prisma.project.update({
-                            where: { id: projectId },
-                            data: {
-                                collaborators: {
-                                    set: Array.from(allCollaboratorIds).map(id => ({ id })),
-                                },
-                            },
-                        });
+                  if (existingProject) {
+                    projectId = existingProject.id;
+                    await this.prisma.project.update({
+                      where: { id: projectId },
+                      data: {
+                        collaborators: {
+                          connect: [{ id: userId }, { id: evaluatorUserId }],
+                        },
+                      },
+                    });
+                  } else {
+                    const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' } });
+                    if (!adminUser) {
+                      errors.push(
+                        `Não foi possível criar o projeto "${projectName}" pois nenhum usuário ADMIN foi encontrado para ser o gestor.`,
+                      );
                     } else {
-                        const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' } });
-                        if (adminUser) {
-                            const newProject = await this.prisma.project.create({
-                                data: {
-                                    name: projectName,
-                                    cycle: { connect: { id: cycle.id } },
-                                    manager: { connect: { id: adminUser.id } },
-                                    collaborators: { connect: [{ id: userId }, { id: evaluatorUserId }] },
-                                }
-                            });
-                            projectId = newProject.id;
-                        }
+                      const newProject = await this.prisma.project.create({
+                        data: {
+                          name: projectName,
+                          cycle: { connect: { id: cycle.id } },
+                          manager: { connect: { id: adminUser.id } },
+                          collaborators: {
+                            connect: [{ id: userId }, { id: evaluatorUserId }],
+                          },
+                        },
+                      });
+                      projectId = newProject.id;
+                      this.logger.log(`Projeto "${projectName}" criado com ID: ${projectId}`);
                     }
+                  }
                 }
-
-                await this.prisma.peerEvaluation.create({ 
-                  data: { 
-                    evaluatedUserId: userId, 
-                    evaluatorUserId, 
-                    cycleId: cycle.id, 
-                    project: record.project,
-                    projectId: projectId,
-                    motivatedToWorkAgain: record.motivatedToWorkAgain, 
-                    generalScore, 
-                    pointsToImprove: record.pointsToImprove || 'N/A', 
-                    pointsToExplore: record.pointsToExplore || 'N/A' 
-                  } 
+                
+                const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
+                  where: { evaluatedUserId: userId, evaluatorUserId, cycleId: cycle.id },
                 });
-                processedCount++;
-              } else {
-                  skippedCount++;
-              }
-              break;
 
-            case 'REFERENCE':
-              if (!record.indicatedEmail) { continue; }
-              const { id: indicatedUserId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(record.indicatedEmail);
-              if (indicatedWasCreated) createdUserCount++;
-              
-              const existingRef = await this.prisma.referenceIndication.findFirst({ where: { indicatorUserId: userId, indicatedUserId, cycleId: cycle.id } });
-              if (!existingRef) {
-                await this.prisma.referenceIndication.create({ data: { indicatorUserId: userId, indicatedUserId, cycleId: cycle.id, justification: record.justification || 'N/A' } });
-                processedCount++;
-              } else {
-                skippedCount++;
-              }
-              break;
-          }
-        }
-        
-        if (scoreCount > 0 && hasSelfEvaluation && hasPeerEvaluation) {
-          const averageScore = Math.round(totalScore / scoreCount);
-          const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' }});
-  
-          if (adminUser) {
-            const justificationText = this.generateJustificationForAverage(averageScore);
-            
-            await this.prisma.leaderEvaluation.upsert({
-              where: { leaderId_collaboratorId_cycleId: { leaderId: adminUser.id, collaboratorId: userId, cycleId: cycle.id }},
-              update: {
-                deliveryScore: averageScore, proactivityScore: averageScore, collaborationScore: averageScore, skillScore: averageScore, justification: justificationText,
-              },
-              create: {
-                leaderId: adminUser.id, collaboratorId: userId, cycleId: cycle.id, deliveryScore: averageScore, proactivityScore: averageScore, collaborationScore: averageScore, skillScore: averageScore, justification: justificationText,
-              }
-            });
-            this.logger.log(`Avaliação de Líder (Admin) criada para ${userEmail} com nota média ${averageScore}.`);
-
-            if (leaderId) {
-                await this.prisma.directReportEvaluation.upsert({
-                    where: { collaboratorId_leaderId_cycleId: { collaboratorId: userId, leaderId, cycleId: cycle.id }},
-                    update: {
-                        visionScore: averageScore, inspirationScore: averageScore, developmentScore: averageScore, feedbackScore: averageScore,
+                if (!existingPeerEval) {
+                  await this.prisma.peerEvaluation.create({
+                    data: {
+                      evaluatedUserId: userId,
+                      evaluatorUserId,
+                      cycleId: cycle.id,
+                      project: record.project,
+                      projectId: projectId,
+                      motivatedToWorkAgain: record.motivatedToWorkAgain,
+                      generalScore: Number(record.generalScore) || 0,
+                      pointsToImprove: record.pointsToImprove || 'N/A',
+                      pointsToExplore: record.pointsToExplore || 'N/A',
                     },
-                    create: {
-                        collaboratorId: userId, leaderId, cycleId: cycle.id, visionScore: averageScore, inspirationScore: averageScore, developmentScore: averageScore, feedbackScore: averageScore,
-                    }
+                  });
+                  processedCount++;
+                } else {
+                  this.logger.warn(
+                    `[DUPLICADO IGNORADO] Avaliação de par de ${record.evaluatorEmail} para ${record.userEmail} já existe.`,
+                  );
+                  skippedCount++;
+                }
+                break;
+
+              case 'REFERENCE':
+                if (!record.indicatedEmail) {
+                  errors.push(`Registro REFERENCE para ${record.userEmail} ignorado: 'indicatedEmail' em falta.`);
+                  skippedCount++;
+                  continue;
+                }
+                const { id: indicatedUserId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(
+                  record.indicatedEmail, UserType.COLABORADOR, record.unidade
+                );
+                if (indicatedWasCreated) createdUserCount++;
+
+                const existingRef = await this.prisma.referenceIndication.findFirst({
+                  where: { indicatorUserId: userId, indicatedUserId, cycleId: cycle.id },
                 });
-                this.logger.log(`Avaliação de Liderado para Líder criada para ${userEmail} -> ${leaderId} com nota média ${averageScore}.`);
+                if (!existingRef) {
+                  await this.prisma.referenceIndication.create({
+                    data: {
+                      indicatorUserId: userId,
+                      indicatedUserId,
+                      cycleId: cycle.id,
+                      justification: record.justification || 'N/A',
+                    },
+                  });
+                  processedCount++;
+                } else {
+                  this.logger.warn(
+                    `[DUPLICADO IGNORADO] Indicação de referência de ${record.userEmail} para ${record.indicatedEmail} já existe.`,
+                  );
+                  skippedCount++;
+                }
+                break;
             }
+          } catch (error) {
+            const message = `Falha ao importar registro para ${record.userEmail} (Tipo: ${record.evaluationType}): ${error.message}`;
+            this.logger.error(message, error.stack);
+            errors.push(message);
           }
         }
       } catch (error) {
-          const message = `Falha crítica ao processar o grupo de registros para ${key}: ${error.message}`;
-          this.logger.error(message, error.stack);
-          errors.push(message);
+        const message = `Falha ao processar usuário ${userEmail}: ${error.message}`;
+        this.logger.error(message, error.stack);
+        errors.push(message);
       }
     }
-  
+    
     const message = `Importação concluída. Registros processados: ${processedCount}. Registros duplicados ignorados: ${skippedCount}. Novos usuários criados: ${createdUserCount}. Erros: ${errors.length}.`;
     this.logger.log(message);
     return { message, errors, processed: processedCount, skipped: skippedCount, createdUsers: createdUserCount };
   }
-  
-  private generateJustificationForAverage(score: number): string {
-    if (score >= 4.5) return "Desempenho consistentemente excepcional, superando as expectativas em todas as áreas avaliadas.";
-    if (score >= 3.5) return "Desempenho forte e consistente, atendendo plenamente às expectativas.";
-    if (score >= 2.5) return "Desempenho satisfatório, com bom cumprimento das responsabilidades essenciais.";
-    if (score >= 1.5) return "Apresenta algumas áreas que necessitam de desenvolvimento e acompanhamento.";
-    return "Desempenho abaixo do esperado, com necessidade de um plano de desenvolvimento claro.";
-  }
 
-  private async findOrCreateUser(email: string, unidade?: string): Promise<{ id: string; wasCreated: boolean; leaderId?: string; }> {
+  private async findOrCreateUser(email: string, userType: UserType = UserType.COLABORADOR, unidade?: string): Promise<{ id: string; wasCreated: boolean; }> {
     if (!email || typeof email !== 'string') {
       throw new Error(`Email inválido fornecido: ${email}`);
     }
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (user) {
-      if (!user.unidade && unidade) {
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    
+    if (existingUser) {
+      if (existingUser.userType !== userType || (unidade && existingUser.unidade !== unidade)) {
         const updatedUser = await this.prisma.user.update({
           where: { email },
-          data: { unidade },
+          data: { 
+            userType, 
+            ...(unidade && { unidade }),
+          },
         });
-        return { id: updatedUser.id, wasCreated: false, leaderId: updatedUser.leaderId };
+        this.logger.log(`Usuário ${email} atualizado para o perfil: ${userType}.`);
+        return { id: updatedUser.id, wasCreated: false };
       }
-      return { id: user.id, wasCreated: false, leaderId: user.leaderId };
+      return { id: existingUser.id, wasCreated: false };
     }
-    const adminUser = await this.prisma.user.findFirst({
-      where: { userType: 'ADMIN' },
-    });
-    if (!adminUser) {
-      this.logger.warn(`Nenhum usuário ADMIN encontrado. O novo usuário ${email} será criado sem um líder.`);
-    }
-    const adminId = adminUser?.id;
-
-    this.logger.log(`Usuário com email ${email} não encontrado. Criando novo usuário.`);
+    
+    this.logger.log(`Usuário com email ${email} não encontrado. Criando novo usuário com perfil: ${userType}.`);
     const initialPassword = randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(initialPassword, 10);
     const newUser = await this.prisma.user.create({
       data: {
-        email, name: email.split('@')[0], userType: UserType.COLABORADOR, passwordHash, leaderId: adminId, unidade: unidade,
+        email,
+        name: email.split('@')[0],
+        userType: userType,
+        passwordHash,
+        unidade: unidade, 
       },
     });
     try {
@@ -602,6 +630,6 @@ export class RhService {
     } catch (emailError) {
       this.logger.warn(`Falha ao enviar e-mail de boas-vindas para ${newUser.email}, mas o usuário foi criado.`);
     }
-    return { id: newUser.id, wasCreated: true, leaderId: newUser.leaderId };
+    return { id: newUser.id, wasCreated: true };
   }
 }
