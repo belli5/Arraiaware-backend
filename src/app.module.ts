@@ -20,6 +20,7 @@ import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -42,7 +43,7 @@ import { UsersModule } from './users/users.module';
     GenAIModule,
     NotificationsModule,
     TeamModule,
-    
+    PdfModule,
   ],
   controllers: [AppController],
   providers: [
