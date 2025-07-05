@@ -162,7 +162,7 @@ export class RhService {
 
   async importUsersFromMultipleXlsx(files: Array<Express.Multer.File>) {
     if (!files || files.length === 0) throw new BadRequestException('Nenhum arquivo enviado.');
-    
+
     const allUsers = [];
     const findValue = (row: any, possibleKeys: string[]) => {
       for (const key in row) {
@@ -173,11 +173,25 @@ export class RhService {
     };
 
     for (const file of files) {
+      try {
+        await this.prisma.importHistory.create({
+          data: {
+            fileName: file.originalname,
+            importDate: new Date(),
+            status: 'Sucesso',
+            file: file.buffer,
+          },
+        });
+        this.logger.log(`Arquivo ${file.originalname} registrado no histórico de importação.`);
+      } catch (error) {
+        this.logger.error(`Falha ao registrar o arquivo ${file.originalname} no histórico: ${error.message}`, error.stack);
+      }
+
       const workbook = XLSX.read(file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const usersJson: any[] = XLSX.utils.sheet_to_json(sheet);
-      
+
       if (!usersJson || usersJson.length === 0) {
         this.logger.warn(`Arquivo ${file.originalname} está vazio ou em formato incorreto. Pulando.`);
         continue;
@@ -187,12 +201,12 @@ export class RhService {
         const name = findValue(row, ['nome', 'name']);
         const email = findValue(row, ['email']);
         const unidade = findValue(row, ['unidade', 'unit']);
-        
+
         if (!name || !email) {
           this.logger.warn(`A linha ${index + 2} do arquivo ${file.originalname} é inválida. Pulando.`);
           return null;
         }
-        
+
         return { name, email, unidade };
       }).filter(user => user !== null);
 
@@ -252,8 +266,6 @@ export class RhService {
   }
 
   async importHistoryFromMultipleXlsx(files: Array<Express.Multer.File>) {
-    this.logger.log(`Iniciando importação de histórico para ${files.length} arquivo(s).`);
-    
     if (!files || files.length === 0) {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
@@ -262,6 +274,16 @@ export class RhService {
 
     for (const file of files) {
       try {
+        await this.prisma.importHistory.create({
+          data: {
+            fileName: file.originalname,
+            importDate: new Date(),
+            status: 'Sucesso',
+            file: file.buffer,
+          },
+        });
+        this.logger.log(`Arquivo ${file.originalname} registrado no histórico.`);
+        
         const records = this.extractHistoryRecordsFromFile(file);
         
         if (records.length > 0) {
@@ -274,7 +296,7 @@ export class RhService {
           allRecordsByUser.get(userEmail).push(...records);
         }
       } catch (error) {
-        this.logger.error(`Falha ao extrair dados do arquivo ${file.originalname}: ${error.message}`, error.stack);
+        this.logger.error(`Falha ao extrair ou registrar dados do arquivo ${file.originalname}: ${error.message}`, error.stack);
       }
     }
 
@@ -373,11 +395,11 @@ export class RhService {
     let createdUserCount = 0;
     let skippedCount = 0;
     const errors = [];
+    const projectManagerMap = new Map<string, string>();
 
     for (const [userEmail, records] of allRecordsByUser.entries()) {
       let determinedUserType: UserType = UserType.COLABORADOR;
       const selfEvals = records.filter(r => r.evaluationType === 'SELF');
-
 
       const isManager = selfEvals.some(r => 
         (r.criterionName?.includes('Gestão de Pessoas*') || 
@@ -496,48 +518,33 @@ export class RhService {
 
               if (record.project) {
                 const projectName = record.project.trim();
-                const existingProject = await this.prisma.project.findFirst({
+                let project = await this.prisma.project.findFirst({
                   where: { 
                     name: projectName, 
                     cycleId: cycle.id 
                   },
                 });
 
-                const adminUser = await this.prisma.user.findFirst({ 
-                  where: { userType: 'ADMIN' } 
-                });
+                if (!project) {
+                  const adminUser = await this.prisma.user.findFirst({ where: { userType: 'ADMIN' } });
+                  const managerId = determinedUserType === UserType.GESTOR ? userId : adminUser?.id;
 
-                if (existingProject) {
-                  projectId = existingProject.id;
+                  if (!managerId) {
+                    throw new Error('Nenhum gestor ou admin encontrado para o projeto');
+                  }
                   
-            
-                  if (determinedUserType === UserType.GESTOR) {
-                    await this.prisma.project.update({
-                      where: { id: projectId },
-                      data: { managerId: userId }
-                    });
-                    this.logger.log(`Usuário ${userEmail} definido como GESTOR do projeto ${projectName}`);
-                  }
-                } else {
-                 
-                  const newManagerId = determinedUserType === UserType.GESTOR 
-                    ? userId 
-                    : adminUser?.id;
-
-                  if (!newManagerId) {
-                    throw new Error('Nenhum usuário ADMIN encontrado para ser gestor do projeto');
-                  }
-
-                  const newProject = await this.prisma.project.create({
+                  project = await this.prisma.project.create({
                     data: {
                       name: projectName,
                       cycleId: cycle.id,
-                      managerId: newManagerId,
+                      managerId: managerId,
                     },
                   });
-                  projectId = newProject.id;
-                  this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${newManagerId}`);
+                  this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
                 }
+                
+                projectId = project.id;
+                projectManagerMap.set(projectId, project.managerId);
               }
 
               const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
@@ -614,6 +621,28 @@ export class RhService {
           const message = `Falha ao importar registro para ${record.userEmail} (Tipo: ${record.evaluationType}): ${error.message}`;
           this.logger.error(message, error.stack);
           errors.push(message);
+        }
+      }
+    }
+
+    // Atualiza líderes dos colaboradores baseado nos projetos
+    for (const [projectId, managerId] of projectManagerMap.entries()) {
+      const projectWithCollaborators = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        include: { collaborators: { select: { id: true } } }
+      });
+      
+      if (projectWithCollaborators && managerId) {
+        const collaboratorIds = projectWithCollaborators.collaborators
+          .map(c => c.id)
+          .filter(id => id !== managerId);
+        
+        if (collaboratorIds.length > 0) {
+          await this.prisma.user.updateMany({
+            where: { id: { in: collaboratorIds } },
+            data: { leaderId: managerId }
+          });
+          this.logger.log(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
         }
       }
     }
