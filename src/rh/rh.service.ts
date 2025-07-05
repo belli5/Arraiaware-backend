@@ -437,6 +437,7 @@ export class RhService {
         try {
           if (!record.userEmail || !record.cycleName || !record.evaluationType) {
             errors.push(`Registro ignorado por falta de campos essenciais.`);
+            skippedCount++;
             continue;
           }
           
@@ -538,13 +539,21 @@ export class RhService {
                       name: projectName,
                       cycleId: cycle.id,
                       managerId: managerId,
+                      collaborators: { connect: { id: userId } } // Conecta o usuário principal
                     },
                   });
                   this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
                 }
                 
                 projectId = project.id;
-                projectManagerMap.set(projectId, project.managerId);
+                
+                // Conecta o avaliador ao projeto
+                await this.prisma.project.update({
+                  where: { id: project.id },
+                  data: { collaborators: { connect: { id: evaluatorUserId } } }
+                });
+
+                projectManagerMap.set(project.id, project.managerId);
               }
 
               const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
@@ -625,24 +634,26 @@ export class RhService {
       }
     }
 
-    // Atualiza líderes dos colaboradores baseado nos projetos
+    // Atualiza líderes dos colaboradores baseado nos projetos - LÓGICA APRIMORADA
     for (const [projectId, managerId] of projectManagerMap.entries()) {
-      const projectWithCollaborators = await this.prisma.project.findUnique({
-        where: { id: projectId },
-        include: { collaborators: { select: { id: true } } }
-      });
-      
-      if (projectWithCollaborators && managerId) {
-        const collaboratorIds = projectWithCollaborators.collaborators
-          .map(c => c.id)
-          .filter(id => id !== managerId);
+      if (managerId) {
+        const projectWithCollaborators = await this.prisma.project.findUnique({
+          where: { id: projectId },
+          include: { collaborators: { select: { id: true } } }
+        });
         
-        if (collaboratorIds.length > 0) {
-          await this.prisma.user.updateMany({
-            where: { id: { in: collaboratorIds } },
-            data: { leaderId: managerId }
-          });
-          this.logger.log(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
+        if (projectWithCollaborators?.collaborators) {
+          const collaboratorIds = projectWithCollaborators.collaborators
+            .map(c => c.id)
+            .filter(id => id !== managerId);
+          
+          if (collaboratorIds.length > 0) {
+            await this.prisma.user.updateMany({
+              where: { id: { in: collaboratorIds } },
+              data: { leaderId: managerId }
+            });
+            this.logger.log(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
+          }
         }
       }
     }
