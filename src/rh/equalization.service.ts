@@ -245,4 +245,65 @@ export class EqualizationService {
 
     return { message: `Equalização para o colaborador ${collaborator.name} foi finalizada com sucesso.` };
   }
+
+    /**
+   * Gera um conteúdo HTML para o relatório de equalização de um colaborador.
+   * @param data Os dados consolidados da avaliação.
+   * @returns Uma string contendo o HTML do relatório.
+   */
+  public generateEqualizationReportHtml(data: EqualizationResponseDto): string {
+
+    const styles = `
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 800px; margin: auto; padding: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        h1, h2, h3 { color: #2c3e50; }
+        h1 { font-size: 24px; }
+        h2 { font-size: 20px; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 30px; }
+        .section { margin-bottom: 20px; }
+        .criterion { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9; }
+        .criterion-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+        .score { font-size: 14px; margin-bottom: 5px; }
+        .score span { font-weight: bold; padding: 2px 6px; border-radius: 4px; color: #fff; }
+        .score-high { background-color: #27ae60; }
+        .score-mid { background-color: #f39c12; }
+        .score-low { background-color: #e74c3c; }
+        .justification { font-style: italic; color: #555; background-color: #fff; padding: 10px; border-radius: 5px; border: 1px dashed #ccc; }
+      </style>
+    `;
+
+    const getScoreClass = (score) => {
+      if (score >= 4) return 'score-high';
+      if (score >= 2.5) return 'score-mid';
+      return 'score-low';
+    };
+
+    const criteriaHtml = data.consolidatedCriteria.map(c => `
+      <div class="criterion">
+        <div class="criterion-title">${c.criterionName} ${c.hasDiscrepancy ? '<span style="color: #e74c3c;">(Discrepância!)</span>' : ''}</div>
+        ${c.selfEvaluation ? `<div class="score">Autoavaliação: <span class="${getScoreClass(c.selfEvaluation.score)}">${c.selfEvaluation.score}</span></div>` : ''}
+        ${c.peerEvaluation ? `<div class="score">Média Pares: <span class="${getScoreClass(c.peerEvaluation.score)}">${c.peerEvaluation.score}</span></div>` : ''}
+        ${c.selfEvaluation?.justification ? `<div class="justification"><b>Justificativa:</b> ${c.selfEvaluation.justification}</div>` : ''}
+      </div>
+    `).join('');
+    
+    const body = `
+      <div class="container">
+        <div class="header">
+          <h1>Relatório de Avaliação - RPE</h1>
+        </div>
+        <div class="section">
+          <h2>Dados do Colaborador</h2>
+          <p><strong>Nome:</strong> ${data.collaboratorName}</p>
+          <p><strong>Ciclo:</strong> ${data.cycleName}</p>
+        </div>
+        <div class="section">
+          <h2>Avaliações por Critério</h2>
+          ${criteriaHtml}
+      </div>
+    `;
+
+    return `<!DOCTYPE html><html><head><title>Relatório de Avaliação</title>${styles}</head><body>${body}</body></html>`;
+  }
 }

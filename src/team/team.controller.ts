@@ -33,7 +33,7 @@ export class TeamController {
   @Get('manager/:managerId')
   @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR)
   @ApiOperation({ summary: 'Obtém a lista de projetos e seus membros gerenciados por um gestor' })
-  @ApiResponse({ status: 200, description: 'Lista de times gerenciados retornada com sucesso.', type: [ManagedTeamDto] }) // Use o DTO correto aqui
+  @ApiResponse({ status: 200, description: 'Lista de times gerenciados retornada com sucesso.', type: [ManagedTeamDto] })
   @ApiResponse({ status: 404, description: 'Gestor ou projetos não encontrados.' })
   async getTeamByManager(@Param('managerId', ParseUUIDPipe) managerId: string): Promise<ManagedTeamDto[]> {
     return this.teamService.getTeamByManager(managerId);
