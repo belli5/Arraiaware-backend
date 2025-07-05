@@ -7,6 +7,7 @@ import {
   Project,
   SelfEvaluation,
   User,
+  UserType,
 } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { GenAIService } from 'src/gen-ai/gen-ai.service';
@@ -221,7 +222,7 @@ export class CommitteeService {
 
     const evaluationsData = await Promise.all(
       allFilteredCollaborators.map(async user => {
-        if (!user.leaderId) {
+        if (!user.leaderId && user.userType !== UserType.GESTOR) {
             return null;
         }
         
@@ -229,7 +230,7 @@ export class CommitteeService {
           this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId }, select: { score: true } }),
           this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId }, select: { generalScore: true } }),
           this.prisma.leaderEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
-          this.prisma.directReportEvaluation.findFirst({ where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId } }),
+          user.leaderId ? this.prisma.directReportEvaluation.findFirst({ where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId } }) : Promise.resolve(null),
           this.prisma.finalizedEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
           this.prisma.equalizationLog.findFirst({ where: { collaboratorId: user.id, cycleId, changeType: 'Observação' }, orderBy: { createdAt: 'desc' } }),
           this.prisma.aISummary.findFirst({ where: { collaboratorId: user.id, cycleId: cycleId, summaryType: 'EQUALIZATION_SUMMARY' }, orderBy: { createdAt: 'desc' } }),
@@ -249,8 +250,11 @@ export class CommitteeService {
             const sum = directReportEval.visionScore + directReportEval.inspirationScore + directReportEval.developmentScore + directReportEval.feedbackScore;
             directReportScore = parseFloat((sum / 4).toFixed(1));
         }
+        
+        const isCollaborator = user.userType === UserType.COLABORADOR;
+        const areCollaboratorEvalsMissing = isCollaborator && (managerEvaluationScore === null || directReportScore === null);
 
-        if (selfEvaluationScore === null || peerEvaluationScore === null || managerEvaluationScore === null || directReportScore === null) {
+        if (selfEvaluationScore === null || peerEvaluationScore === null || areCollaboratorEvalsMissing) {
           return null;
         }
 
@@ -282,7 +286,6 @@ export class CommitteeService {
       pagination: { totalItems, totalPages, currentPage: page },
     };
   }
-
 
 
   async getSingleAiSummary(evaluationId: string, requestor: User): Promise<{ summary: string }> {

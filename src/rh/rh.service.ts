@@ -686,7 +686,6 @@ export class RhService {
           continue;
         }
 
-        // 1. Criar Avaliação de Líder para Liderado (baseada em média)
         const selfEvals = await this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId: cycle.id } });
         const peerEvals = await this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId: cycle.id } });
 
@@ -717,7 +716,6 @@ export class RhService {
           }
         }
 
-        // 2. Criar Avaliação de Liderado para Líder (com notas neutras)
         const directReportEvalDto = {
           collaboratorId: user.id,
           leaderId: user.leaderId,
