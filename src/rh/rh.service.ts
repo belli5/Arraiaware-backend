@@ -364,6 +364,7 @@ export class RhService {
         if (normalizedSheetName.includes('autoavaliação')) {
           record.evaluationType = 'SELF';
           record.criterionName = findValue(row, ['critério']);
+          record.generalDescription = findValue(row, ['DESCRIÇÃO GERAL']);
           record.score = Number(findValue(row, ['auto-avaliação', 'autoavaliacao']));
           record.scoreDescription = findValue(row, ['descriçãonota']);
           record.justification = findValue(row, ['dados e fatos']);
@@ -465,7 +466,8 @@ export class RhService {
                 update: {},
                 create: { 
                   criterionName: record.criterionName, 
-                  pillar: 'Comportamento' 
+                  pillar: 'Comportamento',
+                  description: record.generalDescription || 'N/A'
                 },
               });
 
