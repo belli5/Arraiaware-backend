@@ -77,6 +77,11 @@ export class HistoryItemDto {
   @IsString()
   @IsOptional()
   unidade?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  generalDescription?: string;
 }
 
 export class ImportHistoryDto {
