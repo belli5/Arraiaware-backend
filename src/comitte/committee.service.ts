@@ -195,7 +195,6 @@ export class CommitteeService {
 
     const whereClause: Prisma.UserWhereInput = {
       isActive: true,
-      userType: 'COLABORADOR',
     };
 
     if (search) {
