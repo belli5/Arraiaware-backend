@@ -147,7 +147,7 @@ model ReferenceIndication {
 }
 
 model LeaderEvaluation {
-  id                 String   @id @default(cuid())
+  id                 String   @id @default(uuid())
   leader             User     @relation("EvaluationsMadeByLeader", fields: [leaderId], references: [id])
   leaderId           String
   collaborator       User     @relation("EvaluationsReceivedByCollaborator", fields: [collaboratorId], references: [id])
@@ -172,7 +172,7 @@ enum UserType {
   RH
 }
 model ImportHistory {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid())
   fileName    String
   importDate  DateTime @default(now())
   status      String
@@ -180,7 +180,7 @@ model ImportHistory {
 }
 
 model FinalizedEvaluation {
-  id              String              @id @default(cuid())
+  id              String              @id @default(uuid())
   finalScore      Int
   collaboratorId  String
   cycleId         String
@@ -196,7 +196,7 @@ model FinalizedEvaluation {
 }
 
 model EqualizationLog {
-  id              String          @id @default(cuid())
+  id              String          @id @default(uuid())
   changeType      String 
   criterionName   String?
   previousValue   String?
@@ -225,7 +225,7 @@ model AISummary {
 }
 
 model DirectReportEvaluation {
-  id               String   @id @default(cuid())
+  id               String   @id @default(uuid())
   collaborator     User     @relation("EvaluationsDoneByCollaborator", fields: [collaboratorId], references: [id])
   collaboratorId   String
   leader           User     @relation("EvaluationsReceivedByLeader", fields: [leaderId], references: [id])
