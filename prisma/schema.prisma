@@ -170,6 +170,7 @@ enum UserType {
   GESTOR
   ADMIN
   RH
+  COMITE
 }
 model ImportHistory {
   id          String   @id @default(cuid())
