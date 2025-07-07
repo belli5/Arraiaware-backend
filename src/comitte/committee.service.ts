@@ -343,6 +343,7 @@ export class CommitteeService {
 
     const transactionPayload: Prisma.PrismaPromise<any>[] = [];
 
+    // Lógica para atualizar a nota final, se fornecida
     if (dto.finalScore !== undefined) {
       const criterionId = 'geral'; 
       await this.prisma.evaluationCriterion.upsert({
@@ -370,18 +371,49 @@ export class CommitteeService {
       );
     }
 
-    if (dto.observation) {
-      transactionPayload.push(
-        this.prisma.equalizationLog.create({
-          data: {
-            changeType: 'Observação',
-            observation: this.encryptionService.encrypt(dto.observation),
-            changedById: committeeMemberId,
-            collaboratorId,
-            cycleId,
-          },
-        }),
-      );
+    // Lógica modificada para atualizar ou criar a observação
+    if (dto.observation !== undefined) {
+      const existingLog = await this.prisma.equalizationLog.findFirst({
+        where: {
+          collaboratorId,
+          cycleId,
+          changeType: 'Observação',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      // Criptografa a observação se ela não for nula/vazia, senão a define como nula.
+      const encryptedObservation = dto.observation
+        ? this.encryptionService.encrypt(dto.observation)
+        : null;
+
+      if (existingLog) {
+        // Se um log de observação já existe, atualiza o mais recente
+        transactionPayload.push(
+          this.prisma.equalizationLog.update({
+            where: { id: existingLog.id },
+            data: {
+              observation: encryptedObservation,
+              changedById: committeeMemberId,
+            },
+          }),
+        );
+      } else if (dto.observation) {
+        // Se não existe log e a observação não é nula/vazia, cria um novo
+        transactionPayload.push(
+          this.prisma.equalizationLog.create({
+            data: {
+              changeType: 'Observação',
+              observation: encryptedObservation,
+              changedById: committeeMemberId,
+              collaboratorId,
+              cycleId,
+            },
+          }),
+        );
+      }
     }
 
     if (transactionPayload.length === 0) {
