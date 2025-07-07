@@ -17,7 +17,7 @@ export class CommitteeController {
   constructor(private readonly committeeService: CommitteeService) {}
 
   @Get('summary/last')
-  @Roles(UserType.ADMIN, UserType.RH)
+  @Roles(UserType.ADMIN, UserType.COMITE)
   @ApiOperation({ summary: 'Obter resumo do último ciclo de avaliação cadastrado' })
   @ApiResponse({ status: 200, description: 'Resumo do ciclo retornado com sucesso.' })
   @ApiResponse({ status: 404, description: 'Nenhum ciclo foi encontrado.' })
@@ -26,7 +26,7 @@ export class CommitteeController {
   }
 
   @Get('export/cycle/:cycleId/excel')
-  @Roles(UserType.ADMIN, UserType.RH)
+  @Roles(UserType.ADMIN, UserType.COMITE)
   @ApiOperation({ summary: 'Exportar dados de um ciclo específico para Excel' })
   @ApiResponse({ status: 200, description: 'Arquivo Excel gerado e download iniciado.' })
   @ApiResponse({ status: 403, description: 'Acesso negado.' })
