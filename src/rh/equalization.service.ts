@@ -74,7 +74,12 @@ export class EqualizationService {
         return {
           criterionId: criterion.id,
           criterionName: criterion.criterionName,
-          selfEvaluation: selfEval ? { score: selfEval.score, justification: selfEval.justification } : undefined,
+          selfEvaluation: selfEval
+            ? {
+                score: selfEval.score,
+                justification: selfEval.justification,
+              }
+            : undefined,
           peerEvaluation:
             peerAverageScore !== null
               ? {
@@ -87,7 +92,29 @@ export class EqualizationService {
       },
     );
 
-    const response: any = {
+    const finalizedEvaluations = await this.prisma.finalizedEvaluation.findMany({
+      where: { collaboratorId: userId, cycleId },
+    });
+
+    let status = 'Pendente';
+    if (
+      finalizedEvaluations.length === allCriteria.length &&
+      finalizedEvaluations.every(ev => ev.finalScore > 0)
+    ) {
+      status = 'Equalizada';
+    }
+    const summary = await this.prisma.aISummary.findFirst({
+      where: {
+        collaboratorId: userId,
+        cycleId,
+        summaryType: 'EQUALIZATION_SUMMARY',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const aiSummary = summary ? summary.content : undefined;
+
+    const response: EqualizationResponseDto = {
       collaboratorId: userId,
       collaboratorName: collaborator.name,
       cycleId: cycleId,
@@ -95,10 +122,15 @@ export class EqualizationService {
       consolidatedCriteria,
       peerFeedbacks,
       referenceFeedbacks,
+      status,
+      aiSummary,
     };
 
     if (leaderAverageScore !== null) {
-        response.leaderEvaluation = { score: leaderAverageScore, justification: leaderJustification || '' };
+      (response as any).leaderEvaluation = {
+        score: leaderAverageScore,
+        justification: leaderJustification || '',
+      };
     }
 
     return response;
@@ -246,11 +278,6 @@ export class EqualizationService {
     return { message: `Equalização para o colaborador ${collaborator.name} foi finalizada com sucesso.` };
   }
 
-    /**
-   * Gera um conteúdo HTML para o relatório de equalização de um colaborador.
-   * @param data Os dados consolidados da avaliação.
-   * @returns Uma string contendo o HTML do relatório.
-   */
   public generateEqualizationReportHtml(data: EqualizationResponseDto): string {
 
     const styles = `
