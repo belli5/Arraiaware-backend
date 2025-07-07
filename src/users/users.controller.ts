@@ -99,4 +99,13 @@ export class UsersController {
   ) {
     return this.usersService.getEvaluationHistory(id, cycleId);
   }
+
+  @Get(':id/cycles')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Listar os ciclos de avaliação em que um usuário participou' })
+  @ApiResponse({ status: 200, description: 'Lista de ciclos retornada com sucesso.'})
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.'})
+  findUserCycles(@Param('id', ParseUUIDPipe) id: string) {
+    return this.usersService.findUserCycles(id);
+  }
 }
