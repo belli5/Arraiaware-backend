@@ -9,11 +9,12 @@ import {
   User,
   UserType,
 } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import { EncryptionService } from 'src/common/encryption/encryption.service';
 import { GenAIService } from 'src/gen-ai/gen-ai.service';
-import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { EqualizationService } from 'src/rh/equalization.service';
+import * as XLSX from 'xlsx';
 import { PrismaService } from '../prisma/prisma.service';
+import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
 
 export interface CommitteeSummary {
@@ -29,6 +30,7 @@ export class CommitteeService {
     private prisma: PrismaService,
     private genAIService: GenAIService,
     private equalizationService: EqualizationService,
+    private encryptionService: EncryptionService,
   ) {}
 
   private async getLastCycleId(): Promise<string> {
@@ -115,7 +117,7 @@ export class CommitteeService {
       entry[`Autoavaliação - ${ev.criterion.criterionName}`] = ev.score;
       entry['Autoavaliação - Justificativas'] = `${entry['Autoavaliação - Justificativas'] || ''}${
         ev.criterion.criterionName
-      }: ${ev.justification}\n`;
+      }: ${this.encryptionService.decrypt(ev.justification)}\n`;
     });
 
     (leaderEvaluations as (LeaderEvaluation & { collaborator: User; leader: User })[]).forEach(
@@ -125,7 +127,7 @@ export class CommitteeService {
         entry['Aval. Líder - Proatividade'] = ev.proactivityScore;
         entry['Aval. Líder - Colaboração'] = ev.collaborationScore;
         entry['Aval. Líder - Habilidades'] = ev.skillScore;
-        entry['Aval. Líder - Justificativa'] = ev.justification || '';
+        entry['Aval. Líder - Justificativa'] = this.encryptionService.decrypt(ev.justification) || '';
       },
     );
 
@@ -143,8 +145,8 @@ export class CommitteeService {
         };
       }
       acc[evaluatedId].scores.push(ev.generalScore);
-      acc[evaluatedId].pointsToImprove.push(`- ${ev.pointsToImprove} (Avaliador: ${ev.evaluatorUser.name})`);
-      acc[evaluatedId].pointsToExplore.push(`- ${ev.pointsToExplore} (Avaliador: ${ev.evaluatorUser.name})`);
+      acc[evaluatedId].pointsToImprove.push(`- ${this.encryptionService.decrypt(ev.pointsToImprove)} (Avaliador: ${ev.evaluatorUser.name})`);
+      acc[evaluatedId].pointsToExplore.push(`- ${this.encryptionService.decrypt(ev.pointsToExplore)} (Avaliador: ${ev.evaluatorUser.name})`);
       return acc;
     }, {} as Record<string, any>);
 
@@ -270,8 +272,8 @@ export class CommitteeService {
           managerEvaluationScore,
           directReportScore,
           finalScore: finalizedEval?.finalScore || null,
-          observation: equalizationLog?.observation || null,
-          genAiSummary: aiSummary?.content || null,
+          observation: equalizationLog ? this.encryptionService.decrypt(equalizationLog.observation) : null,
+          genAiSummary: aiSummary ? this.encryptionService.decrypt(aiSummary.content) : null,
         };
       }),
     );
@@ -306,7 +308,7 @@ export class CommitteeService {
     });
 
     if (existingSummary) {
-      return { summary: existingSummary.content };
+      return { summary: this.encryptionService.decrypt(existingSummary.content) };
     }
 
     const consolidatedView = await this.equalizationService.getConsolidatedView(collaboratorId, cycleId);
@@ -319,7 +321,7 @@ export class CommitteeService {
     await this.prisma.aISummary.create({
       data: {
         summaryType: 'EQUALIZATION_SUMMARY',
-        content: summary,
+        content: this.encryptionService.encrypt(summary),
         collaboratorId,
         cycleId,
         generatedById: requestor.id,
@@ -373,7 +375,7 @@ export class CommitteeService {
         this.prisma.equalizationLog.create({
           data: {
             changeType: 'Observação',
-            observation: dto.observation,
+            observation: this.encryptionService.encrypt(dto.observation),
             changedById: committeeMemberId,
             collaboratorId,
             cycleId,

@@ -21,6 +21,7 @@ import { RolesModule } from './roles/roles.module';
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
 import { PdfModule } from './pdf/pdf.module';
+import { EncryptionModule } from './common/encryption/encryption.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { PdfModule } from './pdf/pdf.module';
     NotificationsModule,
     TeamModule,
     PdfModule,
+    EncryptionModule,
   ],
   controllers: [AppController],
   providers: [

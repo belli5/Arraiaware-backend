@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
+import { EncryptionService } from 'src/common/encryption/encryption.service';
 import { GenAIService } from 'src/gen-ai/gen-ai.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +16,7 @@ export class EqualizationService {
     private prisma: PrismaService,
     private genAIService: GenAIService,
     private notificationsService: NotificationsService,
+    private encryptionService: EncryptionService,
   ) {}
 
   async getConsolidatedView(userId: string, cycleId: string): Promise<EqualizationResponseDto> {
@@ -60,13 +62,13 @@ export class EqualizationService {
 
     const peerFeedbacks: PeerFeedbackSummaryDto[] = peerEvaluations.map(p => ({
       evaluatorName: p.evaluatorUser?.name ?? 'Anônimo',
-      pointsToImprove: p.pointsToImprove,
-      pointsToExplore: p.pointsToExplore,
+      pointsToImprove: this.encryptionService.decrypt(p.pointsToImprove),
+      pointsToExplore: this.encryptionService.decrypt(p.pointsToExplore),
     }));
 
     const referenceFeedbacks: ReferenceFeedbackSummaryDto[] = referenceIndications.map(r => ({
       indicatedName: r.indicatedUser?.name ?? 'Anônimo',
-      justification: r.justification,
+      justification: this.encryptionService.decrypt(r.justification),
     }));
 
     const peerAverageScore =
@@ -81,7 +83,7 @@ export class EqualizationService {
         leaderEvaluation.collaborationScore +
         leaderEvaluation.skillScore;
       leaderAverageScore = sum / 4;
-      leaderJustification = leaderEvaluation.justification;
+      leaderJustification = this.encryptionService.decrypt(leaderEvaluation.justification);
     }
 
     const consolidatedCriteria = allCriteria.map(
@@ -93,12 +95,14 @@ export class EqualizationService {
         return {
           criterionId: criterion.id,
           criterionName: criterion.criterionName,
+
           selfEvaluation: selfEval
             ? {
                 score: selfEval.score,
-                justification: selfEval.justification,
+                justification: this.encryptionService.decrypt(selfEval.justification),
               }
             : undefined,
+
           peerEvaluation:
             peerAverageScore !== null
               ? {
@@ -148,7 +152,7 @@ export class EqualizationService {
     await this.prisma.aISummary.create({
       data: {
         summaryType: 'EQUALIZATION_SUMMARY',
-        content: summary,
+        content: this.encryptionService.encrypt(summary),
         collaboratorId: userId,
         cycleId: cycleId,
         generatedById: requestor.id,
@@ -208,7 +212,7 @@ export class EqualizationService {
         this.prisma.equalizationLog.create({
           data: {
             changeType: 'Observação',
-            observation: committeeObservation,
+            observation: this.encryptionService.encrypt(committeeObservation),
             changedById: committeeMemberId,
             collaboratorId,
             cycleId,
@@ -257,7 +261,7 @@ export class EqualizationService {
       await this.prisma.aISummary.create({
         data: {
           summaryType: 'BRUTAL_FACTS',
-          content: brutalFacts,
+          content: this.encryptionService.encrypt(brutalFacts),
           collaboratorId: collaboratorId,
           cycleId: cycleId,
           generatedById: committeeMemberId,

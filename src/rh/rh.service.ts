@@ -543,7 +543,7 @@ export class RhService {
                       name: projectName,
                       cycleId: cycle.id,
                       managerId: managerId,
-                      collaborators: { connect: { id: userId } } // Conecta o usuário principal
+                      collaborators: { connect: { id: userId } } 
                     },
                   });
                   this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
@@ -551,7 +551,7 @@ export class RhService {
                 
                 projectId = project.id;
                 
-                // Conecta o avaliador ao projeto
+             
                 await this.prisma.project.update({
                   where: { id: project.id },
                   data: { collaborators: { connect: { id: evaluatorUserId } } }
@@ -638,7 +638,7 @@ export class RhService {
       }
     }
 
-    // Atualiza líderes dos colaboradores baseado nos projetos - LÓGICA APRIMORADA
+
     for (const [projectId, managerId] of projectManagerMap.entries()) {
       if (managerId) {
         const projectWithCollaborators = await this.prisma.project.findUnique({
