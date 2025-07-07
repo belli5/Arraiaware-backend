@@ -7,6 +7,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
 
 @ApiTags('Users')
 @Controller('api/users')
@@ -30,6 +31,15 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso.'})
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @Get('paginated')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.ADMIN, UserType.RH)
+  @ApiOperation({ summary: 'Listar usuários com paginação e filtros' })
+  @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso.'})
+  findPaginated(@Query() queryDto: GetUsersQueryDto) {
+    return this.usersService.findPaginated(queryDto);
   }
 
   @Get(':id')
