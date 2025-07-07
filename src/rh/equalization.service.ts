@@ -27,7 +27,15 @@ export class EqualizationService {
       throw new NotFoundException('Colaborador ou Ciclo de Avaliação não encontrado.');
     }
 
-    const [selfEvaluations, leaderEvaluation, peerEvaluations, referenceIndications, allCriteria] = await Promise.all([
+    const [
+        selfEvaluations,
+        leaderEvaluation,
+        peerEvaluations,
+        referenceIndications,
+        allCriteria,
+        finalizedEvaluations,
+        aiSummaryRecord
+    ] = await Promise.all([
       this.prisma.selfEvaluation.findMany({ where: { userId, cycleId }, include: { criterion: true } }),
       this.prisma.leaderEvaluation.findFirst({ where: { collaboratorId: userId, cycleId } }),
       this.prisma.peerEvaluation.findMany({
@@ -39,6 +47,17 @@ export class EqualizationService {
         include: { indicatedUser: { select: { name: true } } },
       }),
       this.prisma.evaluationCriterion.findMany(),
+      this.prisma.finalizedEvaluation.findMany({
+        where: { collaboratorId: userId, cycleId },
+      }),
+      this.prisma.aISummary.findFirst({
+        where: {
+          collaboratorId: userId,
+          cycleId,
+          summaryType: 'EQUALIZATION_SUMMARY',
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     const peerFeedbacks: PeerFeedbackSummaryDto[] = peerEvaluations.map(p => ({
@@ -76,7 +95,14 @@ export class EqualizationService {
         return {
           criterionId: criterion.id,
           criterionName: criterion.criterionName,
-          selfEvaluation: selfEval ? { score: selfEval.score, justification: this.encryptionService.decrypt(selfEval.justification) } : undefined,
+
+          selfEvaluation: selfEval
+            ? {
+                score: selfEval.score,
+                justification: this.encryptionService.decrypt(selfEval.justification),
+              }
+            : undefined,
+
           peerEvaluation:
             peerAverageScore !== null
               ? {
@@ -89,7 +115,16 @@ export class EqualizationService {
       },
     );
 
-    const response: any = {
+    let status = 'Pendente';
+    if (
+      finalizedEvaluations.length > 0 &&
+      finalizedEvaluations.length === allCriteria.length &&
+      finalizedEvaluations.every(ev => ev.finalScore > 0)
+    ) {
+      status = 'Equalizada';
+    }
+
+    const response: EqualizationResponseDto = {
       collaboratorId: userId,
       collaboratorName: collaborator.name,
       cycleId: cycleId,
@@ -97,11 +132,11 @@ export class EqualizationService {
       consolidatedCriteria,
       peerFeedbacks,
       referenceFeedbacks,
+      status,
+      aiSummary: aiSummaryRecord?.content,
     };
 
-    if (leaderAverageScore !== null) {
-        response.leaderEvaluation = { score: leaderAverageScore, justification: leaderJustification || '' };
-    }
+
 
     return response;
   }
@@ -298,6 +333,7 @@ export class EqualizationService {
         <div class="section">
           <h2>Avaliações por Critério</h2>
           ${criteriaHtml}
+        </div>
       </div>
     `;
 
