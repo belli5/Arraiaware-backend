@@ -7,7 +7,7 @@ export class UpdateCommitteeEvaluationDto {
     example: 4.5,
   })
   @IsNumber()
-  @Min(1)
+  @Min(0)
   @Max(5)
   @IsOptional()
   finalScore?: number;
