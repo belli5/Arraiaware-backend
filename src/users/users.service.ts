@@ -12,6 +12,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -299,5 +301,54 @@ export class UsersService {
     });
 
     return cycles;
+  }
+
+    async findPaginated(queryDto: GetUsersQueryDto) {
+    const { page = 1, limit = 10, search, userType } = queryDto;
+
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+      ];
+    }
+
+    if (userType) {
+      where.userType = userType;
+    }
+
+    const [users, totalItems] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        include: {
+          roles: true,
+          leader: true,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: users.map((user) => {
+        const { passwordHash, ...result } = user;
+        return result;
+      }),
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 }
