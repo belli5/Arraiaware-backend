@@ -10,9 +10,9 @@ import {
   UserType,
 } from '@prisma/client';
 import { EncryptionService } from 'src/common/encryption/encryption.service';
-import { GenAIService } from 'src/gen-ai/gen-ai.service';
 import { EqualizationService } from 'src/rh/equalization.service';
 import * as XLSX from 'xlsx';
+import { GenAIService } from '../gen-ai/gen-ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
@@ -213,14 +213,17 @@ export class CommitteeService {
       };
     }
 
-    const allFilteredCollaborators = await this.prisma.user.findMany({
-      where: whereClause,
-      include: {
-        roles: { where: { type: 'CARGO' } },
-        leader: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+    const [allFilteredCollaborators, allCriteria] = await Promise.all([
+      this.prisma.user.findMany({
+        where: whereClause,
+        include: {
+          roles: { where: { type: 'CARGO' } },
+          leader: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.evaluationCriterion.count(),
+    ]);
 
     const evaluationsData = await Promise.all(
       allFilteredCollaborators.map(async user => {
@@ -228,12 +231,12 @@ export class CommitteeService {
             return null;
         }
         
-        const [selfEvals, peerEvals, leaderEval, directReportEval, finalizedEval, equalizationLog, aiSummary] = await Promise.all([
+        const [selfEvals, peerEvals, leaderEval, directReportEval, finalizedEvals, equalizationLog, aiSummary] = await Promise.all([
           this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId }, select: { score: true } }),
           this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId }, select: { generalScore: true } }),
           this.prisma.leaderEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
           user.leaderId ? this.prisma.directReportEvaluation.findFirst({ where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId } }) : Promise.resolve(null),
-          this.prisma.finalizedEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
+          this.prisma.finalizedEvaluation.findMany({ where: { collaboratorId: user.id, cycleId } }),
           this.prisma.equalizationLog.findFirst({ where: { collaboratorId: user.id, cycleId, changeType: 'Observação' }, orderBy: { createdAt: 'desc' } }),
           this.prisma.aISummary.findFirst({ where: { collaboratorId: user.id, cycleId: cycleId, summaryType: 'EQUALIZATION_SUMMARY' }, orderBy: { createdAt: 'desc' } }),
         ]);
@@ -260,6 +263,16 @@ export class CommitteeService {
           return null;
         }
 
+        let status = 'Pendente';
+        if (finalizedEvals.length > 0 && finalizedEvals.length === allCriteria && finalizedEvals.every(ev => ev.finalScore > 0)) {
+            status = 'Equalizada';
+        }
+
+        const finalScore =
+          finalizedEvals.length > 0
+            ? parseFloat((finalizedEvals.reduce((sum, ev) => sum + ev.finalScore, 0) / finalizedEvals.length).toFixed(1))
+            : null;
+
         return {
           id: `${user.id}_${cycleId}`,
           collaboratorName: user.name,
@@ -271,7 +284,8 @@ export class CommitteeService {
           peerEvaluationScore,
           managerEvaluationScore,
           directReportScore,
-          finalScore: finalizedEval?.finalScore || null,
+          finalScore: finalScore,
+          status: status,
           observation: equalizationLog ? this.encryptionService.decrypt(equalizationLog.observation) : null,
           genAiSummary: aiSummary ? this.encryptionService.decrypt(aiSummary.content) : null,
         };
@@ -342,8 +356,6 @@ export class CommitteeService {
     }
 
     const transactionPayload: Prisma.PrismaPromise<any>[] = [];
-
-    // Lógica para atualizar a nota final, se fornecida
     if (dto.finalScore !== undefined) {
       const criterionId = 'geral'; 
       await this.prisma.evaluationCriterion.upsert({
@@ -370,8 +382,6 @@ export class CommitteeService {
         }),
       );
     }
-
-    // Lógica modificada para atualizar ou criar a observação
     if (dto.observation !== undefined) {
       const existingLog = await this.prisma.equalizationLog.findFirst({
         where: {
@@ -384,13 +394,11 @@ export class CommitteeService {
         },
       });
 
-      // Criptografa a observação se ela não for nula/vazia, senão a define como nula.
       const encryptedObservation = dto.observation
         ? this.encryptionService.encrypt(dto.observation)
         : null;
 
       if (existingLog) {
-        // Se um log de observação já existe, atualiza o mais recente
         transactionPayload.push(
           this.prisma.equalizationLog.update({
             where: { id: existingLog.id },
@@ -401,7 +409,6 @@ export class CommitteeService {
           }),
         );
       } else if (dto.observation) {
-        // Se não existe log e a observação não é nula/vazia, cria um novo
         transactionPayload.push(
           this.prisma.equalizationLog.create({
             data: {
