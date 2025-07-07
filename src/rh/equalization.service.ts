@@ -133,7 +133,6 @@ export class EqualizationService {
       peerFeedbacks,
       referenceFeedbacks,
       status,
-      aiSummary: aiSummaryRecord?.content,
     };
 
 
