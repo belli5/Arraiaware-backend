@@ -42,7 +42,8 @@ export class EncryptionService {
         const decrypted = Buffer.concat([decipher.update(Buffer.from(encryptedText, 'hex')), decipher.final()]);
         return decrypted.toString('utf8');
     } catch (error) {
-        this.logger.error(`Falha ao descriptografar. É possível que o dado não estivesse criptografado. Retornando o valor original.`, error.message);
+       -
+        this.logger.error(`Falha ao descriptografar. Retornando o valor original. Dado: "${encryptedText}"`, error.message);
         return encryptedText;
     }
   }
