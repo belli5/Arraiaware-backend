@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { HistoryItemDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
+import { EvaluationsService } from 'src/evaluations/evaluations.service';
 
 @Injectable()
 export class RhService {
@@ -16,6 +17,7 @@ export class RhService {
   constructor(
     private prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly evaluationsService: EvaluationsService,
   ) {}
 
   async getGlobalStatus(cycleId: string) {
@@ -659,7 +661,9 @@ export class RhService {
         }
       }
     }
-    
+    this.logger.log('Iniciando a criação de avaliações implícitas (Líder/Liderado)...');
+    await this.createImplicitEvaluations(allRecordsByUser);
+
     const message = `Importação concluída. Registros processados: ${processedCount}. Registros duplicados ignorados: ${skippedCount}. Novos usuários criados: ${createdUserCount}. Erros: ${errors.length}.`;
     this.logger.log(message);
     
@@ -670,6 +674,70 @@ export class RhService {
       skipped: skippedCount, 
       createdUsers: createdUserCount 
     };
+  }
+
+  private async createImplicitEvaluations(allRecordsByUser: Map<string, HistoryItemDto[]>) {
+    for (const [userEmail, records] of allRecordsByUser.entries()) {
+      try {
+        const user = await this.prisma.user.findUnique({ where: { email: userEmail } });
+        const cycle = await this.prisma.evaluationCycle.findUnique({ where: { name: records[0].cycleName.toString() } });
+
+        if (!user || !user.leaderId || !cycle) {
+          continue;
+        }
+
+        const selfEvals = await this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId: cycle.id } });
+        const peerEvals = await this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId: cycle.id } });
+
+        const selfScores = selfEvals.map(e => e.score);
+        const peerScores = peerEvals.map(e => e.generalScore);
+        const allScores = [...selfScores, ...peerScores];
+
+        if (allScores.length > 0) {
+          const averageScore = Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length);
+          const leaderEvalDto = {
+            leaderId: user.leaderId,
+            collaboratorId: user.id,
+            cycleId: cycle.id,
+            deliveryScore: averageScore,
+            proactivityScore: averageScore,
+            collaborationScore: averageScore,
+            skillScore: averageScore,
+            justification: 'Avaliação gerada automaticamente a partir da média das autoavaliações e avaliações de pares.',
+          };
+          
+          const existingLeaderEval = await this.prisma.leaderEvaluation.findFirst({
+            where: { leaderId: user.leaderId, collaboratorId: user.id, cycleId: cycle.id }
+          });
+
+          if (!existingLeaderEval) {
+            await this.evaluationsService.submitLeaderEvaluation(leaderEvalDto);
+            this.logger.log(`Avaliação de LÍDER para ${user.email} criada com nota média ${averageScore}.`);
+          }
+        }
+
+        const directReportEvalDto = {
+          collaboratorId: user.id,
+          leaderId: user.leaderId,
+          cycleId: cycle.id,
+          visionScore: 3,
+          inspirationScore: 3,
+          developmentScore: 3,
+          feedbackScore: 3,
+        };
+
+        const existingDirectReportEval = await this.prisma.directReportEvaluation.findFirst({
+          where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId: cycle.id }
+        });
+
+        if (!existingDirectReportEval) {
+          await this.evaluationsService.submitDirectReportEvaluation(directReportEvalDto);
+          this.logger.log(`Avaliação de LIDERADO (${user.email}) para LÍDER criada com notas neutras.`);
+        }
+      } catch (error) {
+        this.logger.error(`Falha ao criar avaliação implícita para ${userEmail}: ${error.message}`, error.stack);
+      }
+    }
   }
 
   private async findOrCreateUser(

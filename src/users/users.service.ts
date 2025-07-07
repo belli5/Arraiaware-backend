@@ -243,4 +243,61 @@ export class UsersService {
       leaderEvaluations: leaders,
     };
   }
+
+  async findUserCycles(userId: string) {
+    await this.findOne(userId);
+
+    const [
+      selfEvaluationCycles,
+      peerEvaluationCycles,
+      leaderEvaluationCycles,
+      directReportEvaluationCycles,
+      referenceIndicationCycles,
+    ] = await Promise.all([
+      this.prisma.selfEvaluation.findMany({
+        where: { userId },
+        select: { cycleId: true },
+        distinct: ['cycleId'],
+      }),
+      this.prisma.peerEvaluation.findMany({
+        where: { OR: [{ evaluatedUserId: userId }, { evaluatorUserId: userId }] },
+        select: { cycleId: true },
+        distinct: ['cycleId'],
+      }),
+      this.prisma.leaderEvaluation.findMany({
+        where: { OR: [{ collaboratorId: userId }, { leaderId: userId }] },
+        select: { cycleId: true },
+        distinct: ['cycleId'],
+      }),
+      this.prisma.directReportEvaluation.findMany({
+        where: { OR: [{ collaboratorId: userId }, { leaderId: userId }] },
+        select: { cycleId: true },
+        distinct: ['cycleId'],
+      }),
+      this.prisma.referenceIndication.findMany({
+        where: { OR: [{ indicatedUserId: userId }, { indicatorUserId: userId }] },
+        select: { cycleId: true },
+        distinct: ['cycleId'],
+      }),
+    ]);
+
+    const allCycleIds = new Set([
+      ...selfEvaluationCycles.map(e => e.cycleId),
+      ...peerEvaluationCycles.map(e => e.cycleId),
+      ...leaderEvaluationCycles.map(e => e.cycleId),
+      ...directReportEvaluationCycles.map(e => e.cycleId),
+      ...referenceIndicationCycles.map(e => e.cycleId),
+    ]);
+
+    const cycles = await this.prisma.evaluationCycle.findMany({
+      where: {
+        id: { in: [...allCycleIds] },
+      },
+      orderBy: {
+        startDate: 'desc',
+      },
+    });
+
+    return cycles;
+  }
 }

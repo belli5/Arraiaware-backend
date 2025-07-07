@@ -289,6 +289,7 @@ export class CommitteeService {
     };
   }
 
+
   async getSingleAiSummary(evaluationId: string, requestor: User): Promise<{ summary: string }> {
     const [collaboratorId, cycleId] = evaluationId.split('_');
     if (!collaboratorId || !cycleId) {
