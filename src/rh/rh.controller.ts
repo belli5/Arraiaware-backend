@@ -2,6 +2,7 @@ import { Controller, Get, Param, ParseUUIDPipe, Post, Query, UploadedFiles, UseG
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
+import { Audit } from '../AuditModule/audit.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
@@ -25,8 +26,9 @@ export class RhController {
   @Get('export/cycle/:cycleId')
   @Roles(UserType.ADMIN, UserType.RH)
   @ApiOperation({ summary: 'Exportar todos os dados de um ciclo para o comitê' })
+  @Audit('EXPORT_CYCLE_DATA')
   exportCycleData(@Param('cycleId', ParseUUIDPipe) cycleId: string) {
-      return this.rhService.exportCycleData(cycleId);
+    return this.rhService.exportCycleData(cycleId);
   }
 
   @Get('evaluations')
@@ -35,7 +37,7 @@ export class RhController {
     summary: 'Busca a lista paginada de todas as avaliações em andamento',
     description: 'Permite filtrar por nome, status e departamento, com paginação.',
   })
-  @ApiResponse({ status: 200, description: 'Lista de avaliações retornada com sucesso.'})
+  @ApiResponse({ status: 200, description: 'Lista de avaliações retornada com sucesso.' })
   getPaginatedEvaluations(@Query() queryDto: GetEvaluationsQueryDto) {
     return this.rhService.findPaginatedEvaluations(queryDto);
   }
@@ -62,6 +64,7 @@ export class RhController {
       },
     },
   })
+  @Audit('IMPORT_USERS_BATCH')
   importUsersBatch(@UploadedFiles() files: Array<Express.Multer.File>) {
     return this.rhService.importUsersFromMultipleXlsx(files);
   }
@@ -88,6 +91,7 @@ export class RhController {
       },
     },
   })
+  @Audit('IMPORT_HISTORY_BATCH')
   importHistoryBatch(@UploadedFiles() files: Array<Express.Multer.File>) {
     return this.rhService.importHistoryFromMultipleXlsx(files);
   }
