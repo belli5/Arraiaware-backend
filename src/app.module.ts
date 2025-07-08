@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './AuditModule/audit.module';
@@ -29,8 +30,9 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    EventEmitterModule.forRoot(),
     AuthModule,
-    AuditModule, 
+    AuditModule,
     PrismaModule,
     UsersModule,
     RolesModule,
@@ -40,8 +42,8 @@ import { UsersModule } from './users/users.module';
     RhModule,
     ImportHistoryModule,
     ProjectsModule,
-    DashboardModule, 
-    EqualizationModule, 
+    DashboardModule,
+    EqualizationModule,
     CommitteeModule,
     GenAIModule,
     NotificationsModule,
