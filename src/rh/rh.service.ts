@@ -2,13 +2,14 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { EvaluationCycle, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { EvaluationsService } from 'src/evaluations/evaluations.service';
 import * as XLSX from 'xlsx';
+import { AuditService } from '../AuditModule/audit.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { HistoryItemDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
-import { EvaluationsService } from 'src/evaluations/evaluations.service';
 
 @Injectable()
 export class RhService {
@@ -18,6 +19,7 @@ export class RhService {
     private prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   async getGlobalStatus(cycleId: string) {
@@ -166,6 +168,8 @@ export class RhService {
     if (!files || files.length === 0) throw new BadRequestException('Nenhum arquivo enviado.');
 
     const allUsers = [];
+    const fileNames = files.map(f => f.originalname).join(', ');
+
     const findValue = (row: any, possibleKeys: string[]) => {
       for (const key in row) {
         const normalizedKey = key.trim().toLowerCase();
@@ -219,51 +223,87 @@ export class RhService {
       throw new BadRequestException("Nenhum registro de usuário válido foi encontrado nos arquivos enviados.");
     }
 
-    return this.importUsers({ users: allUsers });
+    return this.importUsers({ users: allUsers }, fileNames);
   }
 
-  async importUsers(dto: ImportUsersDto) {
-    let createdCount = 0;
-    let existingCount = 0;
+  async importUsers(dto: ImportUsersDto, sourceFileNames: string = 'API Call') {
+    const { users } = dto;
+    if (!users || users.length === 0) {
+      return { message: "Nenhum usuário para importar.", created: 0, updated: 0 };
+    }
 
-    for (const userRecord of dto.users) {
+    const userEmails = users.map(u => u.email).filter(Boolean);
+    
+    const existingUsers = await this.prisma.user.findMany({
+      where: { email: { in: userEmails } },
+      select: { id: true, email: true },
+    });
+    const existingUserMap = new Map(existingUsers.map(u => [u.email, u.id]));
+
+    const usersToCreate = [];
+    const updatePromises = [];
+    const emailsForWelcome = [];
+
+    for (const userRecord of users) {
       if (!userRecord || !userRecord.email) {
         this.logger.warn('Registro de usuário inválido pulado:', userRecord);
         continue;
       }
 
-      const initialPassword = randomBytes(8).toString('hex');
-      const hashedPassword = await bcrypt.hash(initialPassword, 10);
-
-      const user = await this.prisma.user.upsert({
-        where: { email: userRecord.email },
-        update: { 
-          name: userRecord.name, 
-          unidade: userRecord.unidade 
-        },
-        create: { 
-          name: userRecord.name, 
-          email: userRecord.email, 
-          unidade: userRecord.unidade, 
-          userType: UserType.COLABORADOR, 
-          passwordHash: hashedPassword 
-        },
-      });
-
-      const wasJustCreated = new Date().getTime() - user.createdAt.getTime() < 3000;
-      
-      if (wasJustCreated) {
-        createdCount++;
-        await this.emailService.sendWelcomeEmail(user.email, initialPassword);
+      if (existingUserMap.has(userRecord.email)) {
+        const updatePromise = this.prisma.user.update({
+          where: { email: userRecord.email },
+          data: {
+            name: userRecord.name,
+            unidade: userRecord.unidade,
+          },
+        });
+        updatePromises.push(updatePromise);
       } else {
-        existingCount++;
+        const initialPassword = randomBytes(8).toString('hex');
+        const hashedPassword = await bcrypt.hash(initialPassword, 10);
+        
+        usersToCreate.push({
+          name: userRecord.name,
+          email: userRecord.email,
+          unidade: userRecord.unidade,
+          userType: UserType.COLABORADOR,
+          passwordHash: hashedPassword,
+        });
+
+        emailsForWelcome.push({ email: userRecord.email, password: initialPassword });
       }
     }
 
-    return { 
-      message: 'Importação de usuários concluída.', 
-      createdUsers: createdCount, 
-      existingUsers: existingCount 
+    if (usersToCreate.length > 0) {
+      await this.prisma.user.createMany({
+        data: usersToCreate,
+      });
+    }
+
+    if (updatePromises.length > 0) {
+      await this.prisma.$transaction(updatePromises);
+    }
+    
+    for (const emailInfo of emailsForWelcome) {
+        await this.emailService.sendWelcomeEmail(emailInfo.email, emailInfo.password);
+    }
+
+    await this.auditService.log({
+        action: 'IMPORT_USERS_BATCH',
+        entity: 'User',
+        details: { 
+            source: sourceFileNames,
+            totalRecords: users.length,
+            createdCount: usersToCreate.length,
+            updatedCount: updatePromises.length
+        }
+    });
+
+    return {
+      message: 'Importação de usuários concluída.',
+      created: usersToCreate.length,
+      updated: updatePromises.length,
     };
   }
 
