@@ -1,10 +1,14 @@
 import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { AuditService } from '../AuditModule/audit.service';
 import { EncryptionService } from '../common/encryption/encryption.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor(private readonly encryptionService: EncryptionService) {
+  constructor(
+    private readonly encryptionService: EncryptionService,
+    private readonly auditService: AuditService,
+  ) {
     super();
     if (!this.user) {
       throw new InternalServerErrorException(
@@ -17,9 +21,41 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     await this.$connect();
 
     this.$use(async (params, next) => {
+      const writeActions = ['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'];
+      
+      if (writeActions.includes(params.action)) {
+        const model = params.model;
+        const action = `${params.action.toUpperCase()}_${model}`;
+        
+        let details: any = { args: params.args };
+        
+        if (params.action.startsWith('update') || params.action.startsWith('delete')) {
+          if(params.args.where) {
+            const before = await this[model].findUnique({ where: params.args.where });
+            details.before = before;
+          }
+        }
+
+        const result = await next(params);
+        
+        details.after = result;
+
+        this.auditService.log({
+          action: action,
+          entity: model,
+          entityId: result?.id || params.args?.where?.id,
+          details: details,
+        });
+
+        return result;
+      }
+      return next(params);
+    });
+
+    this.$use(async (params, next) => {
       const sensitiveFields = {
         SelfEvaluation: ['justification', 'scoreDescription'],
-        PeerEvaluation: ['pointsToImprove', 'pointsToExplore'],
+        PeerEvaluation: ['pointsToImprove', 'pointsToExplore', 'motivatedToWorkAgain'],
         ReferenceIndication: ['justification'],
         LeaderEvaluation: ['justification'],
         EqualizationLog: ['observation', 'previousValue', 'newValue'],
@@ -29,28 +65,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       const writeActions = ['create', 'createMany', 'update', 'updateMany', 'upsert'];
       if (writeActions.includes(params.action)) {
         const modelName = params.model;
-        if (sensitiveFields[modelName]) {
-          const data = params.args.data;
-          if (data) {
-            for (const field of sensitiveFields[modelName]) {
-              if (data[field]) {
-                data[field] = this.encryptionService.encrypt(data[field]);
-              }
+        if (sensitiveFields[modelName] && params.args.data) {
+            const data = Array.isArray(params.args.data) ? params.args.data : [params.args.data];
+            for(const item of data) {
+                for (const field of sensitiveFields[modelName]) {
+                    if (item[field] && typeof item[field] === 'string') {
+                        item[field] = this.encryptionService.encrypt(item[field]);
+                    }
+                }
             }
-          }
         }
       }
 
       const result = await next(params);
 
-      const findActions = ['findUnique', 'findFirst', 'findMany'];
+      const findActions = ['findUnique', 'findFirst', 'findMany', 'findUniqueOrThrow', 'findFirstOrThrow'];
       if (findActions.includes(params.action) && result) {
         const modelName = params.model;
         if (sensitiveFields[modelName]) {
           const processResult = (item) => {
             if (!item) return item;
             for (const field of sensitiveFields[modelName]) {
-              if (item[field]) {
+              if (item[field] && typeof item[field] === 'string') {
                 item[field] = this.encryptionService.decrypt(item[field]);
               }
             }
