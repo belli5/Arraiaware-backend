@@ -2,9 +2,9 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { EvaluationCycle, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { AuditService } from 'src/AuditModule/audit.service';
 import { EvaluationsService } from 'src/evaluations/evaluations.service';
 import * as XLSX from 'xlsx';
-import { AuditService } from '../AuditModule/audit.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
