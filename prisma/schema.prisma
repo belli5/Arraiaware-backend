@@ -8,57 +8,58 @@ datasource db {
 }
 
 model User {
-  id                   String    @id @default(uuid())
-  name                 String
-  email                String    @unique
-  passwordHash         String
-  userType             UserType
-  unidade              String?
-  isActive             Boolean   @default(true)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  leaderId             String?
-  roles                Role[]
-  leader               User?     @relation("LeaderTeam", fields: [leaderId], references: [id])
-  teamMembers          User[]    @relation("LeaderTeam")
-  selfEvaluations      SelfEvaluation[]
-  evaluationsReceived  PeerEvaluation[] @relation("EvaluatedUser")
-  evaluationsGiven     PeerEvaluation[] @relation("EvaluatorUser")
-  referencesIndicated  ReferenceIndication[] @relation("IndicatorUser")
-  referencesReceived   ReferenceIndication[] @relation("IndicatedUser")
-  managedProjects Project[] @relation("ManagedProjects")
-  projects        Project[] @relation("CollaboratorOnProjects")
-  leaderEvaluationsDone             LeaderEvaluation[]       @relation("EvaluationsMadeByLeader")
-  leaderEvaluationsReceived         LeaderEvaluation[]       @relation("EvaluationsReceivedByCollaborator")
-  finalizedEvaluationsAsCollaborator FinalizedEvaluation[] @relation("FinalizedEvaluationsAsCollaborator")
-  finalizedEvaluationsAsFinalizer    FinalizedEvaluation[] @relation("FinalizedEvaluationsAsFinalizer")
-  logsAsCollaborator                 EqualizationLog[]     @relation("LogsAsCollaborator")
-  logsAsChanger                      EqualizationLog[]     @relation("LogsAsChanger")
-  collaboratorSummaries AISummary[] @relation("CollaboratorSummaries")
-  generatedSummaries    AISummary[] @relation("GeneratorOfSummaries")
-  directReportEvaluationsDone      DirectReportEvaluation[] @relation("EvaluationsDoneByCollaborator")
-  directReportEvaluationsReceived  DirectReportEvaluation[] @relation("EvaluationsReceivedByLeader")
+  id                                 String                   @id @default(uuid())
+  name                               String
+  email                              String                   @unique
+  passwordHash                       String
+  userType                           UserType
+  unidade                            String?
+  isActive                           Boolean                  @default(true)
+  createdAt                          DateTime                 @default(now())
+  updatedAt                          DateTime                 @updatedAt
+  leaderId                           String?
+  roles                              Role[]
+  leader                             User?                    @relation("LeaderTeam", fields: [leaderId], references: [id])
+  teamMembers                        User[]                   @relation("LeaderTeam")
+  selfEvaluations                    SelfEvaluation[]
+  evaluationsReceived                PeerEvaluation[]         @relation("EvaluatedUser")
+  evaluationsGiven                   PeerEvaluation[]         @relation("EvaluatorUser")
+  referencesIndicated                ReferenceIndication[]    @relation("IndicatorUser")
+  referencesReceived                 ReferenceIndication[]    @relation("IndicatedUser")
+  managedProjects                    Project[]                @relation("ManagedProjects")
+  projects                           Project[]                @relation("CollaboratorOnProjects")
+  leaderEvaluationsDone              LeaderEvaluation[]       @relation("EvaluationsMadeByLeader")
+  leaderEvaluationsReceived          LeaderEvaluation[]       @relation("EvaluationsReceivedByCollaborator")
+  finalizedEvaluationsAsCollaborator FinalizedEvaluation[]    @relation("FinalizedEvaluationsAsCollaborator")
+  finalizedEvaluationsAsFinalizer    FinalizedEvaluation[]    @relation("FinalizedEvaluationsAsFinalizer")
+  logsAsCollaborator                 EqualizationLog[]        @relation("LogsAsCollaborator")
+  logsAsChanger                      EqualizationLog[]        @relation("LogsAsChanger")
+  collaboratorSummaries              AISummary[]              @relation("CollaboratorSummaries")
+  generatedSummaries                 AISummary[]              @relation("GeneratorOfSummaries")
+  directReportEvaluationsDone        DirectReportEvaluation[] @relation("EvaluationsDoneByCollaborator")
+  directReportEvaluationsReceived    DirectReportEvaluation[] @relation("EvaluationsReceivedByLeader")
+  auditLogs                          AuditLog[]
 }
 
 model Project {
-  id            String   @id @default(uuid())
-  name          String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  managerId     String
-  manager       User     @relation("ManagedProjects", fields: [managerId], references: [id])
+  managerId String
+  manager   User   @relation("ManagedProjects", fields: [managerId], references: [id])
 
-  collaborators User[]   @relation("CollaboratorOnProjects")
+  collaborators User[] @relation("CollaboratorOnProjects")
 
-  cycleId       String
-  cycle         EvaluationCycle @relation(fields: [cycleId], references: [id])
+  cycleId String
+  cycle   EvaluationCycle @relation(fields: [cycleId], references: [id])
 
-  peerEvaluations      PeerEvaluation[]
+  peerEvaluations PeerEvaluation[]
 }
 
 model Role {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   name        String
   type        String
   description String?
@@ -67,13 +68,13 @@ model Role {
 }
 
 model EvaluationCriterion {
-  id            String   @id @default(uuid())
-  pillar        String
-  criterionName String   @unique
-  description   String?
-  roles         RoleCriteria[]
-  selfEvaluations SelfEvaluation[]
-  finalizedEvaluations FinalizedEvaluation[] 
+  id                   String                @id @default(uuid())
+  pillar               String
+  criterionName        String                @unique
+  description          String?
+  roles                RoleCriteria[]
+  selfEvaluations      SelfEvaluation[]
+  finalizedEvaluations FinalizedEvaluation[]
 }
 
 model RoleCriteria {
@@ -86,40 +87,40 @@ model RoleCriteria {
 }
 
 model EvaluationCycle {
-  id                   String    @id @default(uuid())
-  name                 String    @unique
-  startDate            DateTime
-  endDate              DateTime
-  status               String
-  selfEvaluations      SelfEvaluation[]
-  peerEvaluations      PeerEvaluation[]
-  referenceIndications ReferenceIndication[]
-  projects             Project[]
+  id                      String                   @id @default(uuid())
+  name                    String                   @unique
+  startDate               DateTime
+  endDate                 DateTime
+  status                  String
+  selfEvaluations         SelfEvaluation[]
+  peerEvaluations         PeerEvaluation[]
+  referenceIndications    ReferenceIndication[]
+  projects                Project[]
   leaderEvaluations       LeaderEvaluation[]
-  finalizedEvaluations  FinalizedEvaluation[] 
-  equalizationLogs      EqualizationLog[]
-  aiSummaries AISummary[]     
+  finalizedEvaluations    FinalizedEvaluation[]
+  equalizationLogs        EqualizationLog[]
+  aiSummaries             AISummary[]
   directReportEvaluations DirectReportEvaluation[]
 }
 
 model SelfEvaluation {
-  id                 String     @id @default(uuid())
-  score              Int
-  justification      String
-  scoreDescription   String?
-  submissionStatus   String     @default("Pendente")
-  userId             String
-  cycleId            String
-  criterionId        String
-  user               User       @relation(fields: [userId], references: [id])
-  cycle              EvaluationCycle @relation(fields: [cycleId], references: [id])
-  criterion          EvaluationCriterion @relation(fields: [criterionId], references: [id])
+  id               String              @id @default(uuid())
+  score            Int
+  justification    String
+  scoreDescription String?
+  submissionStatus String              @default("Pendente")
+  userId           String
+  cycleId          String
+  criterionId      String
+  user             User                @relation(fields: [userId], references: [id])
+  cycle            EvaluationCycle     @relation(fields: [cycleId], references: [id])
+  criterion        EvaluationCriterion @relation(fields: [criterionId], references: [id])
 
   @@unique([userId, cycleId, criterionId])
 }
 
 model PeerEvaluation {
-  id                   String    @id @default(uuid())
+  id                   String          @id @default(uuid())
   project              String?
   motivatedToWorkAgain String?
   generalScore         Float
@@ -128,39 +129,39 @@ model PeerEvaluation {
   evaluatedUserId      String?
   evaluatorUserId      String
   cycleId              String
-  evaluatedUser        User?     @relation("EvaluatedUser", fields: [evaluatedUserId], references: [id])
-  evaluatorUser        User      @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id])
-  projectId            String?  
-  Project              Project?  @relation(fields: [projectId], references: [id])
+  evaluatedUser        User?           @relation("EvaluatedUser", fields: [evaluatedUserId], references: [id])
+  evaluatorUser        User            @relation("EvaluatorUser", fields: [evaluatorUserId], references: [id])
+  projectId            String?
+  Project              Project?        @relation(fields: [projectId], references: [id])
   cycle                EvaluationCycle @relation(fields: [cycleId], references: [id])
 }
 
 model ReferenceIndication {
-  id              String   @id @default(uuid())
+  id              String          @id @default(uuid())
   justification   String
   indicatedUserId String?
   indicatorUserId String
   cycleId         String
-  indicatedUser   User?    @relation("IndicatedUser", fields: [indicatedUserId], references: [id])
-  indicatorUser   User     @relation("IndicatorUser", fields: [indicatorUserId], references: [id])
+  indicatedUser   User?           @relation("IndicatedUser", fields: [indicatedUserId], references: [id])
+  indicatorUser   User            @relation("IndicatorUser", fields: [indicatorUserId], references: [id])
   cycle           EvaluationCycle @relation(fields: [cycleId], references: [id])
 }
 
 model LeaderEvaluation {
-  id                 String   @id @default(uuid())
-  leader             User     @relation("EvaluationsMadeByLeader", fields: [leaderId], references: [id])
+  id                 String          @id @default(uuid())
+  leader             User            @relation("EvaluationsMadeByLeader", fields: [leaderId], references: [id])
   leaderId           String
-  collaborator       User     @relation("EvaluationsReceivedByCollaborator", fields: [collaboratorId], references: [id])
+  collaborator       User            @relation("EvaluationsReceivedByCollaborator", fields: [collaboratorId], references: [id])
   collaboratorId     String
   cycle              EvaluationCycle @relation(fields: [cycleId], references: [id])
   cycleId            String
-  deliveryScore      Int      
-  proactivityScore   Int      
-  collaborationScore Int      
-  skillScore         Int      
+  deliveryScore      Int
+  proactivityScore   Int
+  collaborationScore Int
+  skillScore         Int
   justification      String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@unique([leaderId, collaboratorId, cycleId])
 }
@@ -172,64 +173,65 @@ enum UserType {
   RH
   COMITE
 }
+
 model ImportHistory {
-  id          String   @id @default(uuid())
-  fileName    String
-  importDate  DateTime @default(now())
-  status      String
-  file        Bytes
+  id         String   @id @default(uuid())
+  fileName   String
+  importDate DateTime @default(now())
+  status     String
+  file       Bytes
 }
 
 model FinalizedEvaluation {
-  id              String              @id @default(uuid())
-  finalScore      Int
-  collaboratorId  String
-  cycleId         String
-  criterionId     String
-  finalizedById   String
-  finalizedAt     DateTime            @default(now())
-  collaborator    User                @relation("FinalizedEvaluationsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  cycle           EvaluationCycle     @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  criterion       EvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  finalizedBy     User                @relation("FinalizedEvaluationsAsFinalizer", fields: [finalizedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  id             String              @id @default(uuid())
+  finalScore     Int
+  collaboratorId String
+  cycleId        String
+  criterionId    String
+  finalizedById  String
+  finalizedAt    DateTime            @default(now())
+  collaborator   User                @relation("FinalizedEvaluationsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cycle          EvaluationCycle     @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  criterion      EvaluationCriterion @relation(fields: [criterionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  finalizedBy    User                @relation("FinalizedEvaluationsAsFinalizer", fields: [finalizedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([collaboratorId, cycleId, criterionId])
 }
 
 model EqualizationLog {
-  id              String          @id @default(uuid())
-  changeType      String 
-  criterionName   String?
-  previousValue   String?
-  newValue        String?
-  observation     String?
-  changedById     String
-  collaboratorId  String
-  cycleId         String
-  createdAt       DateTime        @default(now())
-  changedBy       User            @relation("LogsAsChanger", fields: [changedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  collaborator    User            @relation("LogsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  cycle           EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  id             String          @id @default(uuid())
+  changeType     String
+  criterionName  String?
+  previousValue  String?
+  newValue       String?
+  observation    String?
+  changedById    String
+  collaboratorId String
+  cycleId        String
+  createdAt      DateTime        @default(now())
+  changedBy      User            @relation("LogsAsChanger", fields: [changedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  collaborator   User            @relation("LogsAsCollaborator", fields: [collaboratorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cycle          EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
 
 model AISummary {
-  id             String   @id @default(uuid())
+  id             String          @id @default(uuid())
   summaryType    String
-  content        String   
-  collaborator   User     @relation("CollaboratorSummaries", fields: [collaboratorId], references: [id], onDelete: Cascade)
+  content        String
+  collaborator   User            @relation("CollaboratorSummaries", fields: [collaboratorId], references: [id], onDelete: Cascade)
   collaboratorId String
   cycle          EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   cycleId        String
-  generatedBy    User     @relation("GeneratorOfSummaries", fields: [generatedById], references: [id])
+  generatedBy    User            @relation("GeneratorOfSummaries", fields: [generatedById], references: [id])
   generatedById  String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime        @default(now())
 }
 
 model DirectReportEvaluation {
-  id               String   @id @default(uuid())
-  collaborator     User     @relation("EvaluationsDoneByCollaborator", fields: [collaboratorId], references: [id])
+  id               String          @id @default(uuid())
+  collaborator     User            @relation("EvaluationsDoneByCollaborator", fields: [collaboratorId], references: [id])
   collaboratorId   String
-  leader           User     @relation("EvaluationsReceivedByLeader", fields: [leaderId], references: [id])
+  leader           User            @relation("EvaluationsReceivedByLeader", fields: [leaderId], references: [id])
   leaderId         String
   cycle            EvaluationCycle @relation(fields: [cycleId], references: [id])
   cycleId          String
@@ -237,8 +239,20 @@ model DirectReportEvaluation {
   inspirationScore Int
   developmentScore Int
   feedbackScore    Int
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   @@unique([collaboratorId, leaderId, cycleId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
 }
