@@ -201,7 +201,7 @@ export class CommitteeService {
     };
 
     if (search) {
-      whereClause.name = { contains: search};
+      whereClause.name = { contains: search };
     }
 
     if (track) {
@@ -213,17 +213,14 @@ export class CommitteeService {
       };
     }
 
-    const [allFilteredCollaborators, allCriteria] = await Promise.all([
-      this.prisma.user.findMany({
-        where: whereClause,
-        include: {
-          roles: { where: { type: 'CARGO' } },
-          leader: true,
-        },
-        orderBy: { name: 'asc' },
-      }),
-      this.prisma.evaluationCriterion.count(),
-    ]);
+    const allFilteredCollaborators = await this.prisma.user.findMany({
+      where: whereClause,
+      include: {
+        roles: { where: { type: 'CARGO' } },
+        leader: true,
+      },
+      orderBy: { name: 'asc' },
+    });
 
     const evaluationsData = await Promise.all(
       allFilteredCollaborators.map(async user => {
@@ -231,12 +228,12 @@ export class CommitteeService {
             return null;
         }
         
-        const [selfEvals, peerEvals, leaderEval, directReportEval, finalizedEvals, equalizationLog, aiSummary] = await Promise.all([
+        const [selfEvals, peerEvals, leaderEval, directReportEval, finalizedEval, equalizationLog, aiSummary] = await Promise.all([
           this.prisma.selfEvaluation.findMany({ where: { userId: user.id, cycleId }, select: { score: true } }),
           this.prisma.peerEvaluation.findMany({ where: { evaluatedUserId: user.id, cycleId }, select: { generalScore: true } }),
           this.prisma.leaderEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId } }),
           user.leaderId ? this.prisma.directReportEvaluation.findFirst({ where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId } }) : Promise.resolve(null),
-          this.prisma.finalizedEvaluation.findMany({ where: { collaboratorId: user.id, cycleId } }),
+          this.prisma.finalizedEvaluation.findFirst({ where: { collaboratorId: user.id, cycleId, criterionId: 'geral' } }),
           this.prisma.equalizationLog.findFirst({ where: { collaboratorId: user.id, cycleId, changeType: 'Observação' }, orderBy: { createdAt: 'desc' } }),
           this.prisma.aISummary.findFirst({ where: { collaboratorId: user.id, cycleId: cycleId, summaryType: 'EQUALIZATION_SUMMARY' }, orderBy: { createdAt: 'desc' } }),
         ]);
@@ -263,15 +260,7 @@ export class CommitteeService {
           return null;
         }
 
-        let status = 'Pendente';
-        if (finalizedEvals.length > 0 && finalizedEvals.length === allCriteria && finalizedEvals.every(ev => ev.finalScore > 0)) {
-            status = 'Equalizada';
-        }
-
-        const finalScore =
-          finalizedEvals.length > 0
-            ? parseFloat((finalizedEvals.reduce((sum, ev) => sum + ev.finalScore, 0) / finalizedEvals.length).toFixed(1))
-            : null;
+        const status = (finalizedEval && finalizedEval.finalScore > 0) ? 'Equalizada' : 'Pendente';
 
         return {
           id: `${user.id}_${cycleId}`,
@@ -284,7 +273,7 @@ export class CommitteeService {
           peerEvaluationScore,
           managerEvaluationScore,
           directReportScore,
-          finalScore: finalScore,
+          finalScore: finalizedEval?.finalScore || null,
           status: status,
           observation: equalizationLog ? this.encryptionService.decrypt(equalizationLog.observation) : null,
           genAiSummary: aiSummary ? this.encryptionService.decrypt(aiSummary.content) : null,
@@ -356,6 +345,7 @@ export class CommitteeService {
     }
 
     const transactionPayload: Prisma.PrismaPromise<any>[] = [];
+
     if (dto.finalScore !== undefined) {
       const criterionId = 'geral'; 
       await this.prisma.evaluationCriterion.upsert({
@@ -382,6 +372,7 @@ export class CommitteeService {
         }),
       );
     }
+
     if (dto.observation !== undefined) {
       const existingLog = await this.prisma.equalizationLog.findFirst({
         where: {

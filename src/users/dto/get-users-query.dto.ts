@@ -1,4 +1,3 @@
-// belli5/arraiaware-backend/Arraiaware-backend-10eee35412c40bc27f3c437390c3ffc363d4ccca/src/users/dto/get-users-query.dto.ts
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Type } from 'class-transformer';
