@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, InternalServerErrorException, OnModuleInit, forwardRef } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { AuditService } from '../AuditModule/audit.service';
 import { EncryptionService } from '../common/encryption/encryption.service';
@@ -7,6 +7,7 @@ import { EncryptionService } from '../common/encryption/encryption.service';
 export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(
     private readonly encryptionService: EncryptionService,
+    @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
   ) {
     super();
@@ -20,7 +21,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   async onModuleInit() {
     await this.$connect();
 
+
     this.$use(async (params, next) => {
+  
+      if (params.model === 'AuditLog') {
+        return next(params);
+      }
+
       const writeActions = ['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'];
       
       if (writeActions.includes(params.action)) {
@@ -29,17 +36,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
         
         let details: any = { args: params.args };
         
-        if (params.action.startsWith('update') || params.action.startsWith('delete')) {
-          if(params.args.where) {
+        if ((params.action.startsWith('update') || params.action.startsWith('delete')) && params.args.where) {
             const before = await this[model].findUnique({ where: params.args.where });
             details.before = before;
-          }
         }
 
         const result = await next(params);
         
         details.after = result;
 
+        
         this.auditService.log({
           action: action,
           entity: model,
@@ -52,6 +58,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       return next(params);
     });
 
+
     this.$use(async (params, next) => {
       const sensitiveFields = {
         SelfEvaluation: ['justification', 'scoreDescription'],
@@ -63,9 +70,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       };
 
       const writeActions = ['create', 'createMany', 'update', 'updateMany', 'upsert'];
-      if (writeActions.includes(params.action)) {
-        const modelName = params.model;
-        if (sensitiveFields[modelName] && params.args.data) {
+      if (writeActions.includes(params.action) && params.args.data) {
+          const modelName = params.model;
+          if (sensitiveFields[modelName]) {
             const data = Array.isArray(params.args.data) ? params.args.data : [params.args.data];
             for(const item of data) {
                 for (const field of sensitiveFields[modelName]) {
@@ -74,7 +81,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
                     }
                 }
             }
-        }
+          }
       }
 
       const result = await next(params);
