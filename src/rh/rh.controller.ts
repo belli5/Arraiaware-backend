@@ -44,7 +44,7 @@ export class RhController {
 
   @Post('import/users/batch')
   @Roles(UserType.ADMIN, UserType.RH)
-  @UseInterceptors(FilesInterceptor('files', 40))
+  @UseInterceptors(FilesInterceptor('files', 20))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Importar usuários de um ou mais arquivos XLSX' })
   @ApiResponse({ status: 201, description: 'Usuários importados com sucesso.' })
@@ -71,7 +71,7 @@ export class RhController {
 
   @Post('import/history/batch')
   @Roles(UserType.ADMIN, UserType.RH)
-  @UseInterceptors(FilesInterceptor('files', 40))
+  @UseInterceptors(FilesInterceptor('files', 20))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Importar histórico de avaliações de um ou mais arquivos XLSX' })
   @ApiResponse({ status: 201, description: 'Histórico importado com sucesso.' })
