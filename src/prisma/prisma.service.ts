@@ -21,9 +21,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   async onModuleInit() {
     await this.$connect();
 
-
+   
     this.$use(async (params, next) => {
-  
       if (params.model === 'AuditLog') {
         return next(params);
       }
@@ -33,23 +32,33 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       if (writeActions.includes(params.action)) {
         const model = params.model;
         const action = `${params.action.toUpperCase()}_${model}`;
+        const delegate = model.charAt(0).toLowerCase() + model.slice(1);
         
         let details: any = { args: params.args };
         
-        if ((params.action.startsWith('update') || params.action.startsWith('delete')) && params.args.where) {
-            const before = await this[model].findUnique({ where: params.args.where });
-            details.before = before;
+        if (this[delegate] && (params.action.startsWith('update') || params.action.startsWith('delete')) && params.args.where) {
+          if (params.action.endsWith('Many')) {
+            if (typeof this[delegate].findMany === 'function') {
+                const before = await this[delegate].findMany({ where: params.args.where });
+                details.before = before;
+            }
+          } else {
+            if (typeof this[delegate].findUnique === 'function') {
+                const before = await this[delegate].findUnique({ where: params.args.where });
+                details.before = before;
+            }
+          }
         }
 
         const result = await next(params);
         
         details.after = result;
+        const entityIdValue = result?.id || params.args?.where?.id;
 
-        
         this.auditService.log({
           action: action,
           entity: model,
-          entityId: result?.id || params.args?.where?.id,
+          entityId: typeof entityIdValue === 'string' ? entityIdValue : null,
           details: details,
         });
 
@@ -58,7 +67,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       return next(params);
     });
 
-
+   
     this.$use(async (params, next) => {
       const sensitiveFields = {
         SelfEvaluation: ['justification', 'scoreDescription'],
