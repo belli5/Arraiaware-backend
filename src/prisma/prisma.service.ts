@@ -1,72 +1,21 @@
-import { Inject, Injectable, InternalServerErrorException, OnModuleInit, forwardRef } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { AuditService } from '../AuditModule/audit.service';
 import { EncryptionService } from '../common/encryption/encryption.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(
     private readonly encryptionService: EncryptionService,
-    @Inject(forwardRef(() => AuditService))
-    private readonly auditService: AuditService,
+    
   ) {
     super();
-    if (!this.user) {
-      throw new InternalServerErrorException(
-        "Prisma Client não foi gerado corretamente. Por favor, execute 'pnpm prisma generate' no seu terminal.",
-      );
-    }
   }
 
   async onModuleInit() {
     await this.$connect();
 
    
-    this.$use(async (params, next) => {
-      if (params.model === 'AuditLog') {
-        return next(params);
-      }
-
-      const writeActions = ['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert'];
-      
-      if (writeActions.includes(params.action)) {
-        const model = params.model;
-        const action = `${params.action.toUpperCase()}_${model}`;
-        const delegate = model.charAt(0).toLowerCase() + model.slice(1);
-        
-        let details: any = { args: params.args };
-        
-        if (this[delegate] && (params.action.startsWith('update') || params.action.startsWith('delete')) && params.args.where) {
-          if (params.action.endsWith('Many')) {
-            if (typeof this[delegate].findMany === 'function') {
-                const before = await this[delegate].findMany({ where: params.args.where });
-                details.before = before;
-            }
-          } else {
-            if (typeof this[delegate].findUnique === 'function') {
-                const before = await this[delegate].findUnique({ where: params.args.where });
-                details.before = before;
-            }
-          }
-        }
-
-        const result = await next(params);
-        
-        details.after = result;
-        const entityIdValue = result?.id || params.args?.where?.id;
-
-        this.auditService.log({
-          action: action,
-          entity: model,
-          entityId: typeof entityIdValue === 'string' ? entityIdValue : null,
-          details: details,
-        });
-
-        return result;
-      }
-      return next(params);
-    });
-
+   
    
     this.$use(async (params, next) => {
       const sensitiveFields = {
