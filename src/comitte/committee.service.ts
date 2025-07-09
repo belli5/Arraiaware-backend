@@ -224,7 +224,7 @@ export class CommitteeService {
 
     const evaluationsData = await Promise.all(
       allFilteredCollaborators.map(async user => {
-        if (!user.leaderId && user.userType !== UserType.GESTOR) {
+        if (!user.leaderId && user.userType !== UserType.GESTOR && user.userType !==UserType.RH){
             return null;
         }
         
