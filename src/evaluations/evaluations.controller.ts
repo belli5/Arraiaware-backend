@@ -4,12 +4,12 @@ import { UserType } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
+import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
 import { EvaluationsService } from './evaluations.service';
-import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
-import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
 
 @ApiTags('Evaluations')
 @Controller('api/evaluations')
@@ -133,5 +133,16 @@ export class EvaluationsController {
     @Query('cycleId', ParseUUIDPipe) cycleId: string,
   ) {
     return this.evaluationsService.findReferenceIndicationsDoneByUser(userId, cycleId);
+  }
+  @Get('leader/:leaderId')
+  @ApiOperation({ summary: 'Buscar as avaliações que um líder fez para seus liderados' })
+  @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
+  @ApiResponse({ status: 200, description: 'Avaliações retornadas com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Líder ou ciclo não encontrado.' })
+  findLeaderEvaluationsForDirectReports(
+    @Param('leaderId', ParseUUIDPipe) leaderId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.evaluationsService.findLeaderEvaluationsForDirectReports(leaderId, cycleId);
   }
 }
