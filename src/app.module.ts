@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AuditModule } from './AuditModule/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CommitteeModule } from './comitte/committee.module';
@@ -30,9 +30,25 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
+    PinoLoggerModule.forRoot({
+      pinoHttp: {
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? {
+                target: 'pino-pretty',
+                options: {
+                  singleLine: true,
+                  colorize: true,
+                  messageFormat: '{req.method} {req.url} - {res.statusCode} ({responseTime}ms)',
+                },
+              }
+            : undefined, 
+      },
+    }),
     EventEmitterModule.forRoot(),
     AuthModule,
-    AuditModule,
+   
     PrismaModule,
     UsersModule,
     RolesModule,
