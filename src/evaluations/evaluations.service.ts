@@ -275,5 +275,32 @@ export class EvaluationsService {
       justification: this.encryptionService.decrypt(ev.justification),
     }));
   }
+  async findLeaderEvaluationForCollaborator(userId: string, cycleId: string) {
+    const evaluation = await this.prisma.leaderEvaluation.findFirst({
+      where: {
+        collaboratorId: userId,
+        cycleId: cycleId,
+      },
+      include: {
+        leader: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException(
+        `Nenhuma avaliação de líder encontrada para o colaborador com ID ${userId} no ciclo ${cycleId}.`,
+      );
+    }
+    return {
+      ...evaluation,
+      justification: this.encryptionService.decrypt(evaluation.justification),
+    };
+  }
 
 }
