@@ -273,9 +273,10 @@ export class RhService {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
 
-    const results = [];
+    const importResults = [];
 
     for (const file of files) {
+      this.logger.info(`Iniciando processamento do arquivo: ${file.originalname}`);
       const historyRecord = await this.prisma.importHistory.create({
         data: {
           fileName: file.originalname,
@@ -288,14 +289,16 @@ export class RhService {
         const allRecordsByUser = new Map<string, HistoryItemDto[]>();
         const records = this.extractHistoryRecordsFromFile(file);
         
-        if (records.length > 0) {
-          const userEmail = records[0].userEmail;
-          if (!allRecordsByUser.has(userEmail)) {
-            allRecordsByUser.set(userEmail, []);
-          }
-          allRecordsByUser.get(userEmail).push(...records);
-        } else {
+        if (records.length === 0) {
            throw new Error("Nenhum registro válido encontrado no arquivo.");
+        }
+        
+  
+        for (const record of records) {
+            if (!allRecordsByUser.has(record.userEmail)) {
+                allRecordsByUser.set(record.userEmail, []);
+            }
+            allRecordsByUser.get(record.userEmail).push(record);
         }
 
         const importResult = await this.importHistory(allRecordsByUser);
@@ -307,7 +310,7 @@ export class RhService {
           
           },
         });
-        results.push({ file: file.originalname, ...importResult });
+        importResults.push({ file: file.originalname, ...importResult });
 
       } catch (error) {
         this.logger.error(`Falha crítica ao importar o arquivo ${file.originalname}: ${error.message}`, error.stack);
@@ -318,10 +321,15 @@ export class RhService {
            
           },
         });
-        results.push({ file: file.originalname, status: 'Falha', error: error.message });
+        importResults.push({ file: file.originalname, status: 'Falha', error: error.message });
       }
     }
-    return results;
+    
+
+    return {
+      message: "Processamento de importação de múltiplos arquivos concluído.",
+      results: importResults
+    };
   }
   
 
