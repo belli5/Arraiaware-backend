@@ -145,4 +145,15 @@ export class EvaluationsController {
   ) {
     return this.evaluationsService.findLeaderEvaluationsForDirectReports(leaderId, cycleId);
   }
+  @Get('leader-evaluation/for-user/:userId')
+  @ApiOperation({ summary: 'Buscar a avaliação que um colaborador recebeu de seu líder' })
+  @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
+  @ApiResponse({ status: 200, description: 'Avaliação do líder retornada com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Avaliação não encontrada para o colaborador e ciclo especificados.' })
+  findLeaderEvaluationForCollaborator(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.evaluationsService.findLeaderEvaluationForCollaborator(userId, cycleId);
+  }
 }
