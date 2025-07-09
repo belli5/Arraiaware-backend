@@ -18,14 +18,19 @@ export class AuditInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const { user, ip, params, query, body } = request;
 
+   
     return next.handle().pipe(
-      tap(() => {
+      tap((data) => { 
         this.auditService.log({
           action,
           userId: user?.id,
           entityId: params?.id,
           ipAddress: ip,
-          details: { query, body },
+          
+          details: { 
+            request: { query, body },
+            responseSummary: data 
+          }, 
         });
       }),
     );
