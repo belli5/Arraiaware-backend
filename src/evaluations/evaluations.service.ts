@@ -253,4 +253,27 @@ export class EvaluationsService {
       },
     });
   }
+  async findLeaderEvaluationsForDirectReports(leaderId: string, cycleId: string) {
+    const evaluations = await this.prisma.leaderEvaluation.findMany({
+      where: {
+        leaderId,
+        cycleId,
+      },
+      include: {
+        collaborator: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!evaluations) {
+      throw new NotFoundException(
+        `Nenhuma avaliação de líder encontrada para o líder com ID ${leaderId} no ciclo ${cycleId}.`,
+      );
+    }
+
+    return evaluations.map((ev) => ({
+      ...ev,
+      justification: this.encryptionService.decrypt(ev.justification),
+    }));
+  }
+
 }
