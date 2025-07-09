@@ -1,20 +1,21 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EvaluationCycle, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { EvaluationsService } from 'src/evaluations/evaluations.service';
 import * as XLSX from 'xlsx';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { HistoryItemDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
-import { EvaluationsService } from 'src/evaluations/evaluations.service';
 
 @Injectable()
 export class RhService {
-  private readonly logger = new Logger(RhService.name);
-
+  
   constructor(
+    @InjectPinoLogger(RhService.name) private readonly logger: PinoLogger,
     private prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly evaluationsService: EvaluationsService,
@@ -184,7 +185,7 @@ export class RhService {
             file: file.buffer,
           },
         });
-        this.logger.log(`Arquivo ${file.originalname} registrado no histórico de importação.`);
+        this.logger.info(`Arquivo ${file.originalname} registrado no histórico de importação.`);
       } catch (error) {
         this.logger.error(`Falha ao registrar o arquivo ${file.originalname} no histórico: ${error.message}`, error.stack);
       }
@@ -272,38 +273,57 @@ export class RhService {
       throw new BadRequestException('Nenhum arquivo enviado.');
     }
 
-    const allRecordsByUser = new Map<string, HistoryItemDto[]>();
+    const results = [];
 
     for (const file of files) {
+      const historyRecord = await this.prisma.importHistory.create({
+        data: {
+          fileName: file.originalname,
+          status: 'Processando',
+          file: file.buffer,
+        },
+      });
+
       try {
-        await this.prisma.importHistory.create({
-          data: {
-            fileName: file.originalname,
-            importDate: new Date(),
-            status: 'Sucesso',
-            file: file.buffer,
-          },
-        });
-        this.logger.log(`Arquivo ${file.originalname} registrado no histórico.`);
-        
+        const allRecordsByUser = new Map<string, HistoryItemDto[]>();
         const records = this.extractHistoryRecordsFromFile(file);
         
         if (records.length > 0) {
           const userEmail = records[0].userEmail;
-          
           if (!allRecordsByUser.has(userEmail)) {
             allRecordsByUser.set(userEmail, []);
           }
-          
           allRecordsByUser.get(userEmail).push(...records);
+        } else {
+           throw new Error("Nenhum registro válido encontrado no arquivo.");
         }
+
+        const importResult = await this.importHistory(allRecordsByUser);
+        
+        await this.prisma.importHistory.update({
+          where: { id: historyRecord.id },
+          data: {
+            status: importResult.errors.length > 0 ? 'Concluído com erros' : 'Sucesso',
+          
+          },
+        });
+        results.push({ file: file.originalname, ...importResult });
+
       } catch (error) {
-        this.logger.error(`Falha ao extrair ou registrar dados do arquivo ${file.originalname}: ${error.message}`, error.stack);
+        this.logger.error(`Falha crítica ao importar o arquivo ${file.originalname}: ${error.message}`, error.stack);
+        await this.prisma.importHistory.update({
+          where: { id: historyRecord.id },
+          data: {
+            status: 'Falha',
+           
+          },
+        });
+        results.push({ file: file.originalname, status: 'Falha', error: error.message });
       }
     }
-
-    return this.importHistory(allRecordsByUser);
+    return results;
   }
+  
 
   private extractHistoryRecordsFromFile(file: Express.Multer.File): HistoryItemDto[] {
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
@@ -393,7 +413,10 @@ export class RhService {
     return allRecords;
   }
 
-  async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
+
+
+async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
+    this.logger.info(`Iniciando processo de importação de histórico para ${allRecordsByUser.size} usuário(s).`);
     let processedCount = 0;
     let createdUserCount = 0;
     let skippedCount = 0;
@@ -401,6 +424,7 @@ export class RhService {
     const projectManagerMap = new Map<string, string>();
 
     for (const [userEmail, records] of allRecordsByUser.entries()) {
+      this.logger.debug(`Processando ${records.length} registros para o usuário: ${userEmail}`);
       let determinedUserType: UserType = UserType.COLABORADOR;
       const selfEvals = records.filter(r => r.evaluationType === 'SELF');
 
@@ -424,7 +448,7 @@ export class RhService {
         determinedUserType = UserType.GESTOR;
       }
 
-      this.logger.log(`Perfil final determinado para ${userEmail}: ${determinedUserType}`);
+      this.logger.info(`Perfil final determinado para ${userEmail}: ${determinedUserType}`);
 
       const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(
         userEmail,
@@ -434,12 +458,15 @@ export class RhService {
 
       if (userWasCreated) {
         createdUserCount++;
+        this.logger.info(`Novo usuário criado para o email: ${userEmail} com ID: ${userId}`);
       }
 
       for (const record of records) {
         try {
           if (!record.userEmail || !record.cycleName || !record.evaluationType) {
-            errors.push(`Registro ignorado por falta de campos essenciais.`);
+            const errorMessage = `Registro para ${userEmail} ignorado por falta de campos essenciais.`;
+            this.logger.warn(errorMessage);
+            errors.push(errorMessage);
             skippedCount++;
             continue;
           }
@@ -458,7 +485,9 @@ export class RhService {
           switch (record.evaluationType) {
             case 'SELF':
               if (!record.criterionName) {
-                errors.push(`Registro SELF para ${record.userEmail} ignorado: 'criterionName' em falta.`);
+                const errorMessage = `Registro SELF para ${record.userEmail} ignorado: 'criterionName' em falta.`;
+                this.logger.warn(errorMessage);
+                errors.push(errorMessage);
                 skippedCount++;
                 continue;
               }
@@ -496,6 +525,7 @@ export class RhService {
                   },
                 });
                 processedCount++;
+                this.logger.trace(`Autoavaliação para ${userEmail} sobre "${record.criterionName}" criada.`);
               } else {
                 this.logger.warn(`[DUPLICADO IGNORADO] Autoavaliação para ${record.userEmail} com critério "${record.criterionName}" já existe.`);
                 skippedCount++;
@@ -517,6 +547,7 @@ export class RhService {
 
               if (evaluatorWasCreated) {
                 createdUserCount++;
+                this.logger.info(`Novo usuário (avaliador) criado para o email: ${record.evaluatorEmail}`);
               }
 
               let projectId: string | undefined = undefined;
@@ -546,7 +577,7 @@ export class RhService {
                       collaborators: { connect: { id: userId } }
                     },
                   });
-                  this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
+                  this.logger.info(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
                 }
 
                 projectId = project.id;
@@ -589,8 +620,9 @@ export class RhService {
                   },
                 });
                 processedCount++;
+                this.logger.trace(`Avaliação de par de ${record.evaluatorEmail} para ${userEmail} criada.`);
               } else {
-                this.logger.warn(`[DUPLICADO IGNORADO] Avaliação de par de ${record.evaluatorEmail} para ${record.userEmail} já existe.`);
+                this.logger.warn(`[DUPLICADO IGNORADO] Avaliação de par de ${record.evaluatorEmail} para ${userEmail} já existe.`);
                 skippedCount++;
               }
               break;
@@ -610,6 +642,7 @@ export class RhService {
 
               if (indicatedWasCreated) {
                 createdUserCount++;
+                this.logger.info(`Novo usuário (referência) criado para o email: ${record.indicatedEmail}`);
               }
 
               const existingRef = await this.prisma.referenceIndication.findFirst({
@@ -630,6 +663,7 @@ export class RhService {
                   },
                 });
                 processedCount++;
+                this.logger.trace(`Indicação de referência de ${userEmail} para ${record.indicatedEmail} criada.`);
               } else {
                 this.logger.warn(`[DUPLICADO IGNORADO] Indicação de referência de ${record.userEmail} para ${record.indicatedEmail} já existe.`);
                 skippedCount++;
@@ -638,13 +672,13 @@ export class RhService {
           }
         } catch (error) {
           const message = `Falha ao importar registro para ${record.userEmail} (Tipo: ${record.evaluationType}): ${error.message}`;
-          this.logger.error(message, error.stack);
+          this.logger.error({ error }, message);
           errors.push(message);
         }
       }
     }
 
-
+    this.logger.info('Associando líderes aos colaboradores dos projetos...');
     for (const [projectId, managerId] of projectManagerMap.entries()) {
       if (managerId) {
         const projectWithCollaborators = await this.prisma.project.findUnique({
@@ -662,16 +696,17 @@ export class RhService {
               where: { id: { in: collaboratorIds } },
               data: { leaderId: managerId }
             });
-            this.logger.log(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
+            this.logger.info(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
           }
         }
       }
     }
-    this.logger.log('Iniciando a criação de avaliações implícitas (Líder/Liderado)...');
+    
+    this.logger.info('Iniciando a criação de avaliações implícitas (Líder/Liderado)...');
     await this.createImplicitEvaluations(allRecordsByUser);
 
     const message = `Importação concluída. Registros processados: ${processedCount}. Registros duplicados ignorados: ${skippedCount}. Novos usuários criados: ${createdUserCount}. Erros: ${errors.length}.`;
-    this.logger.log(message);
+    this.logger.info(message);
 
     return {
       message,
@@ -681,6 +716,7 @@ export class RhService {
       createdUsers: createdUserCount
     };
   }
+
 
 
   private async createImplicitEvaluations(allRecordsByUser: Map<string, HistoryItemDto[]>) {
@@ -719,7 +755,7 @@ export class RhService {
 
           if (!existingLeaderEval) {
             await this.evaluationsService.submitLeaderEvaluation(leaderEvalDto);
-            this.logger.log(`Avaliação de LÍDER para ${user.email} criada com nota média ${averageScore}.`);
+            this.logger.info(`Avaliação de LÍDER para ${user.email} criada com nota média ${averageScore}.`);
           }
         }
 
@@ -739,7 +775,7 @@ export class RhService {
 
         if (!existingDirectReportEval) {
           await this.evaluationsService.submitDirectReportEvaluation(directReportEvalDto);
-          this.logger.log(`Avaliação de LIDERADO (${user.email}) para LÍDER criada com notas neutras.`);
+          this.logger.info(`Avaliação de LIDERADO (${user.email}) para LÍDER criada com notas neutras.`);
         }
       } catch (error) {
         this.logger.error(`Falha ao criar avaliação implícita para ${userEmail}: ${error.message}`, error.stack);
@@ -769,13 +805,13 @@ export class RhService {
             ...(unidade && { unidade }),
           },
         });
-        this.logger.log(`Usuário ${email} atualizado para o perfil: ${userType}.`);
+        this.logger.info(`Usuário ${email} atualizado para o perfil: ${userType}.`);
         return { id: updatedUser.id, wasCreated: false };
       }
       return { id: existingUser.id, wasCreated: false };
     }
     
-    this.logger.log(`Usuário com email ${email} não encontrado. Criando novo usuário com perfil: ${userType}.`);
+    this.logger.info(`Usuário com email ${email} não encontrado. Criando novo usuário com perfil: ${userType}.`);
     
     const initialPassword = randomBytes(8).toString('hex');
     const passwordHash = await bcrypt.hash(initialPassword, 10);
