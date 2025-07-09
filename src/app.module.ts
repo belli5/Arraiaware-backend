@@ -24,6 +24,7 @@ import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -48,7 +49,7 @@ import { UsersModule } from './users/users.module';
     }),
     EventEmitterModule.forRoot(),
     AuthModule,
-   
+    AdminModule,
     PrismaModule,
     UsersModule,
     RolesModule,
