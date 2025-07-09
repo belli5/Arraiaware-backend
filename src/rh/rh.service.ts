@@ -2,14 +2,13 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { EvaluationCycle, UserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
-import { AuditService } from 'src/AuditModule/audit.service';
-import { EvaluationsService } from 'src/evaluations/evaluations.service';
 import * as XLSX from 'xlsx';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetEvaluationsQueryDto } from './dto/get-evaluations-query.dto';
 import { HistoryItemDto } from './dto/import-history.dto';
 import { ImportUsersDto } from './dto/import-users.dto';
+import { EvaluationsService } from 'src/evaluations/evaluations.service';
 
 @Injectable()
 export class RhService {
@@ -19,7 +18,6 @@ export class RhService {
     private prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly evaluationsService: EvaluationsService,
-    private readonly auditService: AuditService,
   ) {}
 
   async getGlobalStatus(cycleId: string) {
@@ -168,8 +166,6 @@ export class RhService {
     if (!files || files.length === 0) throw new BadRequestException('Nenhum arquivo enviado.');
 
     const allUsers = [];
-    const fileNames = files.map(f => f.originalname).join(', ');
-
     const findValue = (row: any, possibleKeys: string[]) => {
       for (const key in row) {
         const normalizedKey = key.trim().toLowerCase();
@@ -223,87 +219,51 @@ export class RhService {
       throw new BadRequestException("Nenhum registro de usuário válido foi encontrado nos arquivos enviados.");
     }
 
-    return this.importUsers({ users: allUsers }, fileNames);
+    return this.importUsers({ users: allUsers });
   }
 
-  async importUsers(dto: ImportUsersDto, sourceFileNames: string = 'API Call') {
-    const { users } = dto;
-    if (!users || users.length === 0) {
-      return { message: "Nenhum usuário para importar.", created: 0, updated: 0 };
-    }
+  async importUsers(dto: ImportUsersDto) {
+    let createdCount = 0;
+    let existingCount = 0;
 
-    const userEmails = users.map(u => u.email).filter(Boolean);
-    
-    const existingUsers = await this.prisma.user.findMany({
-      where: { email: { in: userEmails } },
-      select: { id: true, email: true },
-    });
-    const existingUserMap = new Map(existingUsers.map(u => [u.email, u.id]));
-
-    const usersToCreate = [];
-    const updatePromises = [];
-    const emailsForWelcome = [];
-
-    for (const userRecord of users) {
+    for (const userRecord of dto.users) {
       if (!userRecord || !userRecord.email) {
         this.logger.warn('Registro de usuário inválido pulado:', userRecord);
         continue;
       }
 
-      if (existingUserMap.has(userRecord.email)) {
-        const updatePromise = this.prisma.user.update({
-          where: { email: userRecord.email },
-          data: {
-            name: userRecord.name,
-            unidade: userRecord.unidade,
-          },
-        });
-        updatePromises.push(updatePromise);
-      } else {
-        const initialPassword = randomBytes(8).toString('hex');
-        const hashedPassword = await bcrypt.hash(initialPassword, 10);
-        
-        usersToCreate.push({
-          name: userRecord.name,
-          email: userRecord.email,
-          unidade: userRecord.unidade,
-          userType: UserType.COLABORADOR,
-          passwordHash: hashedPassword,
-        });
+      const initialPassword = randomBytes(8).toString('hex');
+      const hashedPassword = await bcrypt.hash(initialPassword, 10);
 
-        emailsForWelcome.push({ email: userRecord.email, password: initialPassword });
+      const user = await this.prisma.user.upsert({
+        where: { email: userRecord.email },
+        update: { 
+          name: userRecord.name, 
+          unidade: userRecord.unidade 
+        },
+        create: { 
+          name: userRecord.name, 
+          email: userRecord.email, 
+          unidade: userRecord.unidade, 
+          userType: UserType.COLABORADOR, 
+          passwordHash: hashedPassword 
+        },
+      });
+
+      const wasJustCreated = new Date().getTime() - user.createdAt.getTime() < 3000;
+      
+      if (wasJustCreated) {
+        createdCount++;
+        await this.emailService.sendWelcomeEmail(user.email, initialPassword);
+      } else {
+        existingCount++;
       }
     }
 
-    if (usersToCreate.length > 0) {
-      await this.prisma.user.createMany({
-        data: usersToCreate,
-      });
-    }
-
-    if (updatePromises.length > 0) {
-      await this.prisma.$transaction(updatePromises);
-    }
-    
-    for (const emailInfo of emailsForWelcome) {
-        await this.emailService.sendWelcomeEmail(emailInfo.email, emailInfo.password);
-    }
-
-    await this.auditService.log({
-        action: 'IMPORT_USERS_BATCH',
-        entity: 'User',
-        details: { 
-            source: sourceFileNames,
-            totalRecords: users.length,
-            createdCount: usersToCreate.length,
-            updatedCount: updatePromises.length
-        }
-    });
-
-    return {
-      message: 'Importação de usuários concluída.',
-      created: usersToCreate.length,
-      updated: updatePromises.length,
+    return { 
+      message: 'Importação de usuários concluída.', 
+      createdUsers: createdCount, 
+      existingUsers: existingCount 
     };
   }
 
@@ -444,16 +404,16 @@ export class RhService {
       let determinedUserType: UserType = UserType.COLABORADOR;
       const selfEvals = records.filter(r => r.evaluationType === 'SELF');
 
-      const isManager = selfEvals.some(r => 
-        (r.criterionName?.includes('Gestão de Pessoas*') || 
-         r.criterionName?.includes('Gestão de Projetos*') || 
+      const isManager = selfEvals.some(r =>
+        (r.criterionName?.includes('Gestão de Pessoas*') ||
+         r.criterionName?.includes('Gestão de Projetos*') ||
          r.criterionName?.includes('Gestão Organizacional*')) &&
         r.scoreDescription !== 'Não se Aplica'
       );
 
-      const isRh = selfEvals.some(r => 
-        (r.criterionName?.includes('Novos Clientes**') || 
-         r.criterionName?.includes('Novos Projetos**') || 
+      const isRh = selfEvals.some(r =>
+        (r.criterionName?.includes('Novos Clientes**') ||
+         r.criterionName?.includes('Novos Projetos**') ||
          r.criterionName?.includes('Novos Produtos ou Serviços**')) &&
         r.scoreDescription !== 'Não se Aplica'
       );
@@ -465,10 +425,10 @@ export class RhService {
       }
 
       this.logger.log(`Perfil final determinado para ${userEmail}: ${determinedUserType}`);
-      
+
       const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(
-        userEmail, 
-        determinedUserType, 
+        userEmail,
+        determinedUserType,
         records[0].unidade
       );
 
@@ -483,15 +443,15 @@ export class RhService {
             skippedCount++;
             continue;
           }
-          
+
           const cycle = await this.prisma.evaluationCycle.upsert({
             where: { name: record.cycleName.toString() },
             update: {},
-            create: { 
-              name: record.cycleName.toString(), 
-              startDate: new Date(), 
-              endDate: new Date(), 
-              status: 'Fechado' 
+            create: {
+              name: record.cycleName.toString(),
+              startDate: new Date(),
+              endDate: new Date(),
+              status: 'Fechado'
             },
           });
 
@@ -506,20 +466,20 @@ export class RhService {
               const criterion = await this.prisma.evaluationCriterion.upsert({
                 where: { criterionName: record.criterionName },
                 update: {},
-                create: { 
-                  criterionName: record.criterionName, 
+                create: {
+                  criterionName: record.criterionName,
                   pillar: 'Comportamento',
                   description: record.generalDescription || 'N/A'
                 },
               });
 
               const existingSelfEval = await this.prisma.selfEvaluation.findUnique({
-                where: { 
-                  userId_cycleId_criterionId: { 
-                    userId, 
-                    cycleId: cycle.id, 
-                    criterionId: criterion.id 
-                  } 
+                where: {
+                  userId_cycleId_criterionId: {
+                    userId,
+                    cycleId: cycle.id,
+                    criterionId: criterion.id
+                  }
                 },
               });
 
@@ -550,8 +510,8 @@ export class RhService {
               }
 
               const { id: evaluatorUserId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(
-                record.evaluatorEmail, 
-                UserType.COLABORADOR, 
+                record.evaluatorEmail,
+                UserType.COLABORADOR,
                 record.unidade
               );
 
@@ -564,9 +524,9 @@ export class RhService {
               if (record.project) {
                 const projectName = record.project.trim();
                 let project = await this.prisma.project.findFirst({
-                  where: { 
-                    name: projectName, 
-                    cycleId: cycle.id 
+                  where: {
+                    name: projectName,
+                    cycleId: cycle.id
                   },
                 });
 
@@ -577,34 +537,40 @@ export class RhService {
                   if (!managerId) {
                     throw new Error('Nenhum gestor ou admin encontrado para o projeto');
                   }
-                  
+
                   project = await this.prisma.project.create({
                     data: {
                       name: projectName,
                       cycleId: cycle.id,
                       managerId: managerId,
-                      collaborators: { connect: { id: userId } } 
+                      collaborators: { connect: { id: userId } }
                     },
                   });
                   this.logger.log(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
                 }
-                
+
                 projectId = project.id;
-                
-             
+
                 await this.prisma.project.update({
-                  where: { id: project.id },
-                  data: { collaborators: { connect: { id: evaluatorUserId } } }
+                    where: { id: project.id },
+                    data: {
+                        collaborators: {
+                            connect: [
+                                { id: userId },
+                                { id: evaluatorUserId }
+                            ]
+                        }
+                    }
                 });
 
                 projectManagerMap.set(project.id, project.managerId);
               }
 
               const existingPeerEval = await this.prisma.peerEvaluation.findFirst({
-                where: { 
-                  evaluatedUserId: userId, 
-                  evaluatorUserId, 
-                  cycleId: cycle.id 
+                where: {
+                  evaluatedUserId: userId,
+                  evaluatorUserId,
+                  cycleId: cycle.id
                 },
               });
 
@@ -637,8 +603,8 @@ export class RhService {
               }
 
               const { id: indicatedUserId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(
-                record.indicatedEmail, 
-                UserType.COLABORADOR, 
+                record.indicatedEmail,
+                UserType.COLABORADOR,
                 record.unidade
               );
 
@@ -647,10 +613,10 @@ export class RhService {
               }
 
               const existingRef = await this.prisma.referenceIndication.findFirst({
-                where: { 
-                  indicatorUserId: userId, 
-                  indicatedUserId, 
-                  cycleId: cycle.id 
+                where: {
+                  indicatorUserId: userId,
+                  indicatedUserId,
+                  cycleId: cycle.id
                 },
               });
 
@@ -685,12 +651,12 @@ export class RhService {
           where: { id: projectId },
           include: { collaborators: { select: { id: true } } }
         });
-        
+
         if (projectWithCollaborators?.collaborators) {
           const collaboratorIds = projectWithCollaborators.collaborators
             .map(c => c.id)
             .filter(id => id !== managerId);
-          
+
           if (collaboratorIds.length > 0) {
             await this.prisma.user.updateMany({
               where: { id: { in: collaboratorIds } },
@@ -706,15 +672,16 @@ export class RhService {
 
     const message = `Importação concluída. Registros processados: ${processedCount}. Registros duplicados ignorados: ${skippedCount}. Novos usuários criados: ${createdUserCount}. Erros: ${errors.length}.`;
     this.logger.log(message);
-    
-    return { 
-      message, 
-      errors, 
-      processed: processedCount, 
-      skipped: skippedCount, 
-      createdUsers: createdUserCount 
+
+    return {
+      message,
+      errors,
+      processed: processedCount,
+      skipped: skippedCount,
+      createdUsers: createdUserCount
     };
   }
+
 
   private async createImplicitEvaluations(allRecordsByUser: Map<string, HistoryItemDto[]>) {
     for (const [userEmail, records] of allRecordsByUser.entries()) {
