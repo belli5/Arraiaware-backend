@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class EvaluationStatsDto {
+  @ApiProperty({ description: 'O número total de usuários ativos.' })
+  totalActiveUsers?: number;
+
   @ApiProperty({ description: 'O número total de avaliações esperadas no ciclo.' })
   totalEvaluations: number;
 
