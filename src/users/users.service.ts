@@ -303,17 +303,21 @@ export class UsersService {
     return cycles;
   }
 
-    async findPaginated(queryDto: GetUsersQueryDto) {
-    const { page = 1, limit = 10, search, userType } = queryDto;
+  async findPaginated(queryDto: GetUsersQueryDto) {
+    const { page = 1, limit = 10, search, userType, isActive } = queryDto;
 
-    const where: Prisma.UserWhereInput = {
-      isActive: true,
-    };
+    const where: Prisma.UserWhereInput = {};
+
+    if (isActive === 'true') {
+      where.isActive = true;
+    } else if (isActive === 'false') {
+      where.isActive = false;
+    }
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } },
+        { name: { contains: search} },
+        { email: { contains: search} },
       ];
     }
 
@@ -340,7 +344,7 @@ export class UsersService {
     const totalPages = Math.ceil(totalItems / limit);
 
     return {
-      data: users.map((user) => {
+      data: users.map(user => {
         const { passwordHash, ...result } = user;
         return result;
       }),
