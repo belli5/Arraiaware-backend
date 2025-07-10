@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class GetUsersQueryDto {
   @ApiPropertyOptional({ description: 'Busca por nome ou email do usuário' })
@@ -30,4 +30,9 @@ export class GetUsersQueryDto {
   @Min(1)
   @Type(() => Number)
   limit: number = 10;
+  
+  @IsOptional()
+  @IsString()
+  @IsIn(['true', 'false'])
+  isActive?: string;
 }
