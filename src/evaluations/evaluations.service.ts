@@ -1,11 +1,43 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EncryptionService } from '../common/encryption/encryption.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LeaderEvaluationRecordDto } from './dto/leader-evaluation-record.dto';
 import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
 import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
 import { SubmitReferenceIndicationDto } from './dto/submit-reference-indication.dto';
 import { SubmitSelfEvaluationDto } from './dto/submit-self-evaluation.dto';
+
+const leaderCriteria = [
+  {
+    id: 'leader-criterion-delivery',
+    pillar: 'Execução',
+    criterionName: 'Qualidade e pontualidade das entregas',
+    description: 'Avalia a capacidade de entregar tarefas com alta qualidade e dentro dos prazos acordados.',
+    scoreField: 'deliveryScore',
+  },
+  {
+    id: 'leader-criterion-proactivity',
+    pillar: 'Comportamento',
+    criterionName: 'Proatividade e iniciativa',
+    description: 'Avalia a capacidade de antecipar problemas, propor soluções e agir sem necessidade de supervisão constante.',
+    scoreField: 'proactivityScore',
+  },
+  {
+    id: 'leader-criterion-collaboration',
+    pillar: 'Comportamento',
+    criterionName: 'Colaboração e trabalho em equipe',
+    description: 'Avalia a habilidade de trabalhar de forma eficaz com outros membros da equipe para alcançar objetivos comuns.',
+    scoreField: 'collaborationScore',
+  },
+  {
+    id: 'leader-criterion-skill',
+    pillar: 'Técnico',
+    criterionName: 'Habilidades técnicas e de negócio',
+    description: 'Avalia o domínio das ferramentas e conhecimentos necessários para a função, bem como o entendimento do negócio.',
+    scoreField: 'skillScore',
+  },
+];
 
 @Injectable()
 export class EvaluationsService {
@@ -79,6 +111,69 @@ export class EvaluationsService {
     return this.prisma.referenceIndication.create({ data: encryptedDto });
   }
 
+  async submitLeaderEvaluation(dto: SubmitLeaderEvaluationDto) {
+    const { collaboratorId, leaderId, cycleId, justification, ...scores } = dto;
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [collaboratorId, leaderId] } },
+    });
+    if (users.length !== 2) {
+      throw new NotFoundException('Colaborador ou líder não encontrado.');
+    }
+
+    const encryptedData = {
+      ...scores,
+      justification: this.encryptionService.encrypt(justification),
+    };
+
+    return this.prisma.leaderEvaluation.upsert({
+      where: {
+        leaderId_collaboratorId_cycleId: {
+          leaderId,
+          collaboratorId,
+          cycleId,
+        },
+      },
+      update: encryptedData,
+      create: {
+        leaderId,
+        collaboratorId,
+        cycleId,
+        ...encryptedData,
+      },
+    });
+  }
+
+  async submitDirectReportEvaluation(dto: SubmitDirectReportEvaluationDto) {
+    const { collaboratorId, leaderId, cycleId, ...scores } = dto;
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [collaboratorId, leaderId] } },
+    });
+    if (users.length !== 2) {
+      throw new NotFoundException('Colaborador ou líder não encontrado.');
+    }
+
+    return this.prisma.directReportEvaluation.upsert({
+      where: {
+        collaboratorId_leaderId_cycleId: {
+          collaboratorId,
+          leaderId,
+          cycleId,
+        },
+      },
+      update: {
+        ...scores,
+      },
+      create: {
+        collaboratorId,
+        leaderId,
+        cycleId,
+        ...scores,
+      },
+    });
+  }
+
   async findSelfEvaluation(userId: string, cycleId: string) {
     const evaluations = await this.prisma.selfEvaluation.findMany({
       where: { userId, cycleId },
@@ -116,7 +211,7 @@ export class EvaluationsService {
     const indications = await this.prisma.referenceIndication.findMany({
       where: { indicatorUserId, cycleId },
       include: {
-        indicatorUser: { select: { id: true, name: true } },
+        indicatedUser: { select: { id: true, name: true } },
       },
     });
 
@@ -124,6 +219,75 @@ export class EvaluationsService {
       ...ind,
       justification: this.encryptionService.decrypt(ind.justification),
     }));
+  }
+  
+  async findLeaderEvaluationsForDirectReports(leaderId: string, cycleId: string) {
+    const evaluations = await this.prisma.leaderEvaluation.findMany({
+      where: {
+        leaderId,
+        cycleId,
+      },
+      include: {
+        collaborator: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!evaluations) {
+      throw new NotFoundException(
+        `Nenhuma avaliação de líder encontrada para o líder com ID ${leaderId} no ciclo ${cycleId}.`,
+      );
+    }
+
+    return evaluations.map((ev) => ({
+      ...ev,
+      justification: this.encryptionService.decrypt(ev.justification),
+    }));
+  }
+
+  async findLeaderEvaluationForCollaborator(userId: string, cycleId: string): Promise<LeaderEvaluationRecordDto[]> {
+    const evaluation = await this.prisma.leaderEvaluation.findFirst({
+      where: {
+        collaboratorId: userId,
+        cycleId: cycleId,
+      },
+      include: {
+        leader: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException(
+        `Nenhuma avaliação de líder encontrada para o colaborador com ID ${userId} no ciclo ${cycleId}.`,
+      );
+    }
+
+    const decryptedJustification = this.encryptionService.decrypt(evaluation.justification);
+
+    const records: LeaderEvaluationRecordDto[] = leaderCriteria.map(criterion => {
+      return {
+        id: `${evaluation.id}-${criterion.id}`,
+        collaboratorId: evaluation.collaboratorId,
+        cycleId: evaluation.cycleId,
+        score: evaluation[criterion.scoreField],
+        scoreDescription: `Nota de ${evaluation[criterion.scoreField]} atribuída pelo líder.`,
+        justification: decryptedJustification,
+        criterion: {
+          id: criterion.id,
+          pillar: criterion.pillar,
+          criterionName: criterion.criterionName,
+          description: criterion.description,
+        },
+        leader: evaluation.leader,
+      };
+    });
+
+    return records;
   }
 
   async getUserStatus(userId: string, cycleId: string) {
@@ -161,39 +325,6 @@ export class EvaluationsService {
     }));
   }
 
-  async submitLeaderEvaluation(dto: SubmitLeaderEvaluationDto) {
-    const { collaboratorId, leaderId, cycleId, justification, ...scores } = dto;
-
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: [collaboratorId, leaderId] } },
-    });
-    if (users.length !== 2) {
-      throw new NotFoundException('Colaborador ou líder não encontrado.');
-    }
-
-    const encryptedData = {
-      ...scores,
-      justification: this.encryptionService.encrypt(justification),
-    };
-
-    return this.prisma.leaderEvaluation.upsert({
-      where: {
-        leaderId_collaboratorId_cycleId: {
-          leaderId,
-          collaboratorId,
-          cycleId,
-        },
-      },
-      update: encryptedData,
-      create: {
-        leaderId,
-        collaboratorId,
-        cycleId,
-        ...encryptedData,
-      },
-    });
-  }
-
   async findPeerEvaluationsDoneByUser(evaluatorUserId: string, cycleId: string) {
     const evaluations = await this.prisma.peerEvaluation.findMany({
       where: { evaluatorUserId, cycleId },
@@ -223,84 +354,4 @@ export class EvaluationsService {
       justification: this.encryptionService.decrypt(ind.justification),
     }));
   }
-
-  async submitDirectReportEvaluation(dto: SubmitDirectReportEvaluationDto) {
-    const { collaboratorId, leaderId, cycleId, ...scores } = dto;
-
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: [collaboratorId, leaderId] } },
-    });
-    if (users.length !== 2) {
-      throw new NotFoundException('Colaborador ou líder não encontrado.');
-    }
-
-    return this.prisma.directReportEvaluation.upsert({
-      where: {
-        collaboratorId_leaderId_cycleId: {
-          collaboratorId,
-          leaderId,
-          cycleId,
-        },
-      },
-      update: {
-        ...scores,
-      },
-      create: {
-        collaboratorId,
-        leaderId,
-        cycleId,
-        ...scores,
-      },
-    });
-  }
-  async findLeaderEvaluationsForDirectReports(leaderId: string, cycleId: string) {
-    const evaluations = await this.prisma.leaderEvaluation.findMany({
-      where: {
-        leaderId,
-        cycleId,
-      },
-      include: {
-        collaborator: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    if (!evaluations) {
-      throw new NotFoundException(
-        `Nenhuma avaliação de líder encontrada para o líder com ID ${leaderId} no ciclo ${cycleId}.`,
-      );
-    }
-
-    return evaluations.map((ev) => ({
-      ...ev,
-      justification: this.encryptionService.decrypt(ev.justification),
-    }));
-  }
-  async findLeaderEvaluationForCollaborator(userId: string, cycleId: string) {
-    const evaluation = await this.prisma.leaderEvaluation.findFirst({
-      where: {
-        collaboratorId: userId,
-        cycleId: cycleId,
-      },
-      include: {
-        leader: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    if (!evaluation) {
-      throw new NotFoundException(
-        `Nenhuma avaliação de líder encontrada para o colaborador com ID ${userId} no ciclo ${cycleId}.`,
-      );
-    }
-    return {
-      ...evaluation,
-      justification: this.encryptionService.decrypt(evaluation.justification),
-    };
-  }
-
 }

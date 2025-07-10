@@ -4,6 +4,7 @@ import { UserType } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { LeaderEvaluationRecordDto } from './dto/leader-evaluation-record.dto';
 import { SubmitDirectReportEvaluationDto } from './dto/submit-direct-report-evaluation.dto';
 import { SubmitLeaderEvaluationDto } from './dto/submit-leader-evaluation.dto';
 import { SubmitPeerEvaluationDto } from './dto/submit-peer-evaluation.dto';
@@ -145,15 +146,15 @@ export class EvaluationsController {
   ) {
     return this.evaluationsService.findLeaderEvaluationsForDirectReports(leaderId, cycleId);
   }
-  @Get('leader-evaluation/for-user/:userId')
+ @Get('leader-evaluation/for-user/:userId')
   @ApiOperation({ summary: 'Buscar a avaliação que um colaborador recebeu de seu líder' })
   @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
-  @ApiResponse({ status: 200, description: 'Avaliação do líder retornada com sucesso.' })
-  @ApiResponse({ status: 404, description: 'Avaliação não encontrada para o colaborador e ciclo especificados.' })
+  @ApiResponse({ status: 200, description: 'Avaliações do líder retornadas com sucesso.', type: [LeaderEvaluationRecordDto] }) // Atualizado aqui
+  @ApiResponse({ status: 404, description: 'Avaliação não encontrada.' })
   findLeaderEvaluationForCollaborator(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Query('cycleId', ParseUUIDPipe) cycleId: string,
-  ) {
+  ): Promise<LeaderEvaluationRecordDto[]> { 
     return this.evaluationsService.findLeaderEvaluationForCollaborator(userId, cycleId);
   }
 }
