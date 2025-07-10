@@ -38,6 +38,12 @@ export class UsersController {
   @Roles(UserType.ADMIN, UserType.RH)
   @ApiOperation({ summary: 'Listar usuários com paginação e filtros' })
   @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso.'})
+  @ApiQuery({
+    name: 'isActive',
+    required: false,
+    type: Boolean,
+    description: 'Filtra por status ativo (true) ou inativo (false)',
+  })
   findPaginated(@Query() queryDto: GetUsersQueryDto) {
     return this.usersService.findPaginated(queryDto);
   }
