@@ -212,6 +212,7 @@ export class DashboardService {
     }
 
     return {
+      totalActiveUsers: totalActiveUsers,
       totalEvaluations,
       completedEvaluations,
       pendingEvaluations,
