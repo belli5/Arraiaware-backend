@@ -421,33 +421,36 @@ export class RhService {
     return allRecords;
   }
 
-
-
-async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
+  async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
     this.logger.info(`Iniciando processo de importação de histórico para ${allRecordsByUser.size} usuário(s).`);
     let processedCount = 0;
     let createdUserCount = 0;
     let skippedCount = 0;
     const errors = [];
     const projectManagerMap = new Map<string, string>();
+    const projectNameToManagerEmail = new Map<string, string>();
+    const processedUsers = new Map<string, { userId: string, cycleIds: Set<string> }>();
+
 
     for (const [userEmail, records] of allRecordsByUser.entries()) {
       this.logger.debug(`Processando ${records.length} registros para o usuário: ${userEmail}`);
       let determinedUserType: UserType = UserType.COLABORADOR;
       const selfEvals = records.filter(r => r.evaluationType === 'SELF');
 
-      const isManager = selfEvals.some(r =>
-        (r.criterionName?.includes('Gestão de Pessoas*') ||
-         r.criterionName?.includes('Gestão de Projetos*') ||
-         r.criterionName?.includes('Gestão Organizacional*')) &&
-        r.scoreDescription !== 'Não se Aplica'
+      const isManager = selfEvals.some(
+        r =>
+          (r.criterionName?.includes('Gestão de Pessoas*') ||
+            r.criterionName?.includes('Gestão de Projetos*') ||
+            r.criterionName?.includes('Gestão Organizacional*')) &&
+          r.scoreDescription !== 'Não se Aplica',
       );
 
-      const isRh = selfEvals.some(r =>
-        (r.criterionName?.includes('Novos Clientes**') ||
-         r.criterionName?.includes('Novos Projetos**') ||
-         r.criterionName?.includes('Novos Produtos ou Serviços**')) &&
-        r.scoreDescription !== 'Não se Aplica'
+      const isRh = selfEvals.some(
+        r =>
+          (r.criterionName?.includes('Novos Clientes**') ||
+            r.criterionName?.includes('Novos Projetos**') ||
+            r.criterionName?.includes('Novos Produtos ou Serviços**')) &&
+          r.scoreDescription !== 'Não se Aplica',
       );
 
       if (isRh) {
@@ -458,15 +461,22 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
 
       this.logger.info(`Perfil final determinado para ${userEmail}: ${determinedUserType}`);
 
-      const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(
-        userEmail,
-        determinedUserType,
-        records[0].unidade
-      );
+      if (determinedUserType === UserType.GESTOR) {
+        const peerEvalsWithProject = records.filter(r => r.evaluationType === 'PEER' && r.project);
+        for (const p of peerEvalsWithProject) {
+          projectNameToManagerEmail.set(p.project.trim(), userEmail);
+        }
+      }
+
+      const { id: userId, wasCreated: userWasCreated } = await this.findOrCreateUser(userEmail, determinedUserType, records[0].unidade);
 
       if (userWasCreated) {
         createdUserCount++;
         this.logger.info(`Novo usuário criado para o email: ${userEmail} com ID: ${userId}`);
+      }
+
+      if (!processedUsers.has(userEmail)) {
+        processedUsers.set(userEmail, { userId: userId, cycleIds: new Set() });
       }
 
       for (const record of records) {
@@ -486,9 +496,11 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
               name: record.cycleName.toString(),
               startDate: new Date(),
               endDate: new Date(),
-              status: 'Fechado'
+              status: 'Fechado',
             },
           });
+
+          processedUsers.get(userEmail).cycleIds.add(cycle.id);
 
           switch (record.evaluationType) {
             case 'SELF':
@@ -506,7 +518,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                 create: {
                   criterionName: record.criterionName,
                   pillar: 'Comportamento',
-                  description: record.generalDescription || 'N/A'
+                  description: record.generalDescription || 'N/A',
                 },
               });
 
@@ -515,8 +527,8 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                   userId_cycleId_criterionId: {
                     userId,
                     cycleId: cycle.id,
-                    criterionId: criterion.id
-                  }
+                    criterionId: criterion.id,
+                  },
                 },
               });
 
@@ -550,7 +562,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
               const { id: evaluatorUserId, wasCreated: evaluatorWasCreated } = await this.findOrCreateUser(
                 record.evaluatorEmail,
                 UserType.COLABORADOR,
-                record.unidade
+                record.unidade,
               );
 
               if (evaluatorWasCreated) {
@@ -565,7 +577,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                 let project = await this.prisma.project.findFirst({
                   where: {
                     name: projectName,
-                    cycleId: cycle.id
+                    cycleId: cycle.id,
                   },
                 });
 
@@ -582,7 +594,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                       name: projectName,
                       cycleId: cycle.id,
                       managerId: managerId,
-                      collaborators: { connect: { id: userId } }
+                      collaborators: { connect: { id: userId } },
                     },
                   });
                   this.logger.info(`Projeto "${projectName}" criado com gestor ID: ${managerId}`);
@@ -591,15 +603,12 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                 projectId = project.id;
 
                 await this.prisma.project.update({
-                    where: { id: project.id },
-                    data: {
-                        collaborators: {
-                            connect: [
-                                { id: userId },
-                                { id: evaluatorUserId }
-                            ]
-                        }
-                    }
+                  where: { id: project.id },
+                  data: {
+                    collaborators: {
+                      connect: [{ id: userId }, { id: evaluatorUserId }],
+                    },
+                  },
                 });
 
                 projectManagerMap.set(project.id, project.managerId);
@@ -609,7 +618,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                 where: {
                   evaluatedUserId: userId,
                   evaluatorUserId,
-                  cycleId: cycle.id
+                  cycleId: cycle.id,
                 },
               });
 
@@ -645,7 +654,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
               const { id: indicatedUserId, wasCreated: indicatedWasCreated } = await this.findOrCreateUser(
                 record.indicatedEmail,
                 UserType.COLABORADOR,
-                record.unidade
+                record.unidade,
               );
 
               if (indicatedWasCreated) {
@@ -657,7 +666,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
                 where: {
                   indicatorUserId: userId,
                   indicatedUserId,
-                  cycleId: cycle.id
+                  cycleId: cycle.id,
                 },
               });
 
@@ -686,30 +695,74 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
       }
     }
 
+    this.logger.info('Iniciando a fase de correção de líderes de projeto...');
+    for (const [projectId, currentManagerId] of projectManagerMap.entries()) {
+      const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
+      if (!project) continue;
+
+      const correctManagerEmail = projectNameToManagerEmail.get(project.name);
+      if (!correctManagerEmail) continue;
+
+      const correctManagerUser = await this.prisma.user.findUnique({ where: { email: correctManagerEmail }, select: { id: true } });
+      if (!correctManagerUser || correctManagerUser.id === currentManagerId) {
+        continue;
+      }
+
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { managerId: correctManagerUser.id },
+      });
+      this.logger.info(`Gestor do projeto "${project.name}" (ID: ${projectId}) corrigido para ${correctManagerUser.id}`);
+      projectManagerMap.set(projectId, correctManagerUser.id);
+    }
+
     this.logger.info('Associando líderes aos colaboradores dos projetos...');
     for (const [projectId, managerId] of projectManagerMap.entries()) {
       if (managerId) {
         const projectWithCollaborators = await this.prisma.project.findUnique({
           where: { id: projectId },
-          include: { collaborators: { select: { id: true } } }
+          include: { collaborators: { select: { id: true } } },
         });
 
         if (projectWithCollaborators?.collaborators) {
-          const collaboratorIds = projectWithCollaborators.collaborators
-            .map(c => c.id)
-            .filter(id => id !== managerId);
+          const collaboratorIds = projectWithCollaborators.collaborators.map(c => c.id).filter(id => id !== managerId);
 
           if (collaboratorIds.length > 0) {
             await this.prisma.user.updateMany({
               where: { id: { in: collaboratorIds } },
-              data: { leaderId: managerId }
+              data: { leaderId: managerId },
             });
             this.logger.info(`Líder ${managerId} associado a ${collaboratorIds.length} colaboradores do projeto ${projectId}.`);
           }
         }
       }
     }
-    
+
+    this.logger.info("Iniciando a atualização final do status 'isActive' dos usuários...");
+    for (const [email, { userId, cycleIds }] of processedUsers.entries()) {
+        try {
+            const autoavaliacoesCount = await this.prisma.selfEvaluation.count({
+                where: {
+                    userId: userId,
+                    cycleId: { in: [...cycleIds] }
+                },
+            });
+
+            const isActive = autoavaliacoesCount > 0;
+
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: { isActive: isActive },
+            });
+            this.logger.info(`Usuário ${email} (ID: ${userId}) atualizado para isActive: ${isActive}`);
+
+        } catch (updateError) {
+            const message = `Falha ao atualizar o status do usuário ${email}: ${updateError.message}`;
+            this.logger.error(message);
+            errors.push(message);
+        }
+    }
+
     this.logger.info('Iniciando a criação de avaliações implícitas (Líder/Liderado)...');
     await this.createImplicitEvaluations(allRecordsByUser);
 
@@ -721,11 +774,9 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
       errors,
       processed: processedCount,
       skipped: skippedCount,
-      createdUsers: createdUserCount
+      createdUsers: createdUserCount,
     };
   }
-
-
 
   private async createImplicitEvaluations(allRecordsByUser: Map<string, HistoryItemDto[]>) {
     for (const [userEmail, records] of allRecordsByUser.entries()) {
@@ -756,9 +807,8 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
             skillScore: averageScore,
             justification: 'Avaliação gerada automaticamente a partir da média das autoavaliações e avaliações de pares.',
           };
-          
           const existingLeaderEval = await this.prisma.leaderEvaluation.findFirst({
-            where: { leaderId: user.leaderId, collaboratorId: user.id, cycleId: cycle.id }
+            where: { leaderId: user.leaderId, collaboratorId: user.id, cycleId: cycle.id },
           });
 
           if (!existingLeaderEval) {
@@ -778,7 +828,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
         };
 
         const existingDirectReportEval = await this.prisma.directReportEvaluation.findFirst({
-          where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId: cycle.id }
+          where: { collaboratorId: user.id, leaderId: user.leaderId, cycleId: cycle.id },
         });
 
         if (!existingDirectReportEval) {
@@ -831,6 +881,7 @@ async importHistory(allRecordsByUser: Map<string, HistoryItemDto[]>) {
         userType,
         passwordHash,
         unidade,
+        isActive: false,
       },
     });
 
