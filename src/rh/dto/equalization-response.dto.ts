@@ -61,4 +61,10 @@ export class EqualizationResponseDto {
 
   @ApiProperty({ type: [ReferenceFeedbackSummaryDto], description: "Sumário das indicações de referência recebidas." })
   referenceFeedbacks: ReferenceFeedbackSummaryDto[];
+
+  @ApiPropertyOptional({
+    description: 'Os "Brutal Facts" gerados pela IA para a sessão de feedback.',
+    example: 'A percepção sobre sua comunicação é consistentemente um ponto a ser melhorado...'
+  })
+  brutalFacts?: string;
 }
