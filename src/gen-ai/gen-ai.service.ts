@@ -55,6 +55,11 @@ export class GenAIService {
       4.  Aponte as principais áreas de desenvolvimento, usando as justificativas dos pares e do líder para dar contexto às discrepâncias de notas.
       5.  O tom deve ser profissional e analítico, focado em facilitar a tomada de decisão do comitê.
       6.  cite os nomes dos referenciadores, mas evite expor feedbacks pessoais de forma direta.
+      7. divida nesses pontos:
+        -Pontos Fortes,
+        -Pontos Fracos 
+        -Plano de Ação,
+        -Recomendações Finais
     
       Agora, gere o resumo para o colaborador "${data.collaboratorName}":
     `;
@@ -88,6 +93,11 @@ export class GenAIService {
       2.  Foque em lacunas de performance (onde as notas do líder/pares são baixas) e em lacunas de percepção (onde a autoavaliação é muito diferente da dos outros).
       3.  Use os "pontos a melhorar" dos pares para dar substância aos "Brutal Facts".
       4.  Transforme os dados em pontos de ação/reflexão para o mentor abordar, não apenas numa lista de problemas.
+      5. divida nesses pontos:
+        -Pontos Fortes,
+        -Pontos Fracos 
+        -Plano de Ação,
+        -Recomendações Finais
 
       Agora, gere os "Brutal Facts" para "${data.collaboratorName}":
     `;

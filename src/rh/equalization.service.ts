@@ -34,7 +34,8 @@ export class EqualizationService {
         referenceIndications,
         allCriteria,
         finalizedEvaluations,
-        aiSummaryRecord
+        aiSummaryRecord,
+        brutalFactsRecord 
     ] = await Promise.all([
       this.prisma.selfEvaluation.findMany({ where: { userId, cycleId }, include: { criterion: true } }),
       this.prisma.leaderEvaluation.findFirst({ where: { collaboratorId: userId, cycleId } }),
@@ -55,6 +56,14 @@ export class EqualizationService {
           collaboratorId: userId,
           cycleId,
           summaryType: 'EQUALIZATION_SUMMARY',
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.aISummary.findFirst({
+        where: {
+            collaboratorId: userId,
+            cycleId,
+            summaryType: 'BRUTAL_FACTS',
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -115,14 +124,12 @@ export class EqualizationService {
       },
     );
 
-    let status = 'Pendente';
-    if (
-      finalizedEvaluations.length > 0 &&
-      finalizedEvaluations.length === allCriteria.length &&
-      finalizedEvaluations.every(ev => ev.finalScore > 0)
-    ) {
-      status = 'Equalizada';
-    }
+    // Define o status da equalização.
+    // Se existe um registro de avaliação finalizada com o critério 'geral' e uma nota, está equalizada.
+    const finalizationRecord = finalizedEvaluations.find(
+      (ev) => ev.criterionId === 'geral'
+    );
+    const status = (finalizationRecord && finalizationRecord.finalScore > 0) ? 'Equalizada' : 'Pendente';
 
     const response: EqualizationResponseDto = {
       collaboratorId: userId,
@@ -133,9 +140,8 @@ export class EqualizationService {
       peerFeedbacks,
       referenceFeedbacks,
       status,
+      brutalFacts: brutalFactsRecord ? this.encryptionService.decrypt(brutalFactsRecord.content) : undefined,
     };
-
-
 
     return response;
   }
@@ -173,21 +179,18 @@ export class EqualizationService {
     return { summary };
   }
 
-  async finalizeEqualization(
+async finalizeEqualization(
     collaboratorId: string,
     cycleId: string,
     committeeMemberId: string,
     dto: FinalizeEqualizationDto,
   ) {
-    const { finalizedCriteria, committeeObservation } = dto;
+    const { finalScore, committeeObservation } = dto;
 
-    const [collaborator, cycle, committeeMember, criteriaFromDb] = await Promise.all([
+    const [collaborator, cycle, committeeMember] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: collaboratorId }, include: { leader: true } }),
       this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } }),
       this.prisma.user.findUnique({ where: { id: committeeMemberId } }),
-      this.prisma.evaluationCriterion.findMany({
-        where: { id: { in: finalizedCriteria.map(c => c.criterionId) } },
-      }),
     ]);
 
     if (!collaborator || !cycle) {
@@ -197,14 +200,18 @@ export class EqualizationService {
       throw new NotFoundException(`Membro do comitê com ID ${committeeMemberId} não encontrado.`);
     }
 
-    const criteriaIdsFromDb = new Set(criteriaFromDb.map(c => c.id));
-    const invalidCriterionIds = finalizedCriteria.map(c => c.criterionId).filter(id => !criteriaIdsFromDb.has(id));
-
-    if (invalidCriterionIds.length > 0) {
-      throw new NotFoundException(`Os seguintes critérios não foram encontrados: ${invalidCriterionIds.join(', ')}`);
-    }
-
     const transactionPayload: Prisma.PrismaPromise<any>[] = [];
+
+    const criterionId = 'geral'; 
+    await this.prisma.evaluationCriterion.upsert({
+      where: { id: criterionId },
+      update: {},
+      create: {
+        id: criterionId,
+        pillar: 'Comitê',
+        criterionName: 'Nota Final do Comitê',
+      },
+    });
 
     if (committeeObservation) {
       transactionPayload.push(
@@ -220,30 +227,28 @@ export class EqualizationService {
       );
     }
 
-    for (const criterion of finalizedCriteria) {
-      transactionPayload.push(
-        this.prisma.finalizedEvaluation.upsert({
-          where: {
-            collaboratorId_cycleId_criterionId: {
-              collaboratorId,
-              cycleId,
-              criterionId: criterion.criterionId,
-            },
-          },
-          update: {
-            finalScore: criterion.finalScore,
-            finalizedById: committeeMemberId,
-          },
-          create: {
-            finalScore: criterion.finalScore,
+    transactionPayload.push(
+      this.prisma.finalizedEvaluation.upsert({
+        where: {
+          collaboratorId_cycleId_criterionId: {
             collaboratorId,
             cycleId,
-            criterionId: criterion.criterionId,
-            finalizedById: committeeMemberId,
+            criterionId,
           },
-        }),
-      );
-    }
+        },
+        update: {
+          finalScore: finalScore,
+          finalizedById: committeeMemberId,
+        },
+        create: {
+          finalScore: finalScore,
+          collaboratorId,
+          cycleId,
+          criterionId: criterionId,
+          finalizedById: committeeMemberId,
+        },
+      }),
+    );
 
     await this.prisma.$transaction(transactionPayload);
 
