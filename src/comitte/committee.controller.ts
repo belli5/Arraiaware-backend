@@ -1,13 +1,13 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { UserType } from '@prisma/client';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { User, UserType } from '@prisma/client';
 import { Response } from 'express';
+import { AssignMentorDto } from 'src/users/dto/assign-mentor.dto';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
-import { User } from '@prisma/client';
-import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
+import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
 
 @ApiTags('Committee')
 @Controller('api/committee')
@@ -74,5 +74,18 @@ export class CommitteeController {
   async getSingleAiSummary(@Param('evaluationId') evaluationId: string, @Req() request) {
     const requestor = request.user as User;
     return this.committeeService.getSingleAiSummary(evaluationId, requestor);
+  }
+   @Patch('users/:userId/mentor')
+  @Roles(UserType.ADMIN, UserType.COMITE)
+  @ApiOperation({ summary: 'Define ou remove o mentor de um usuário (Ação restrita ao Comitê)' })
+  @ApiResponse({ status: 200, description: 'Mentor do usuário atualizado com sucesso.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado.' })
+  @ApiResponse({ status: 404, description: 'Usuário ou mentor não encontrado.' })
+  setMentor(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: AssignMentorDto,
+    @Req() request,
+  ) {
+    const committeeMemberId = request.user.id;
   }
 }
