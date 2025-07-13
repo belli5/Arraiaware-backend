@@ -292,6 +292,27 @@ export class CommitteeService {
     };
   }
 
+  async setMentor(userId: string, mentorId: string | null, committeeMemberId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Usuário com ID ${userId} não encontrado.`);
+    }
+
+    if (mentorId) {
+      const mentor = await this.prisma.user.findUnique({ where: { id: mentorId } });
+      if (!mentor) {
+        throw new NotFoundException(`Mentor com ID ${mentorId} não encontrado.`);
+      }
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { mentorId: mentorId },
+    });
+  }
 
   async getSingleAiSummary(evaluationId: string, requestor: User): Promise<{ summary: string }> {
     const [collaboratorId, cycleId] = evaluationId.split('_');
