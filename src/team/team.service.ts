@@ -98,4 +98,19 @@ export class TeamService {
       collaborators: project.collaborators,
     }));
   }
+
+  async getMemberOkrs(userId: string) {
+    return this.prisma.objective.findMany({
+      where: { userId },
+      include: { keyResults: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getMemberPdis(userId: string) {
+    return this.prisma.developmentPlan.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }
