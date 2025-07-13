@@ -149,7 +149,7 @@ export class EvaluationsController {
  @Get('leader-evaluation/for-user/:userId')
   @ApiOperation({ summary: 'Buscar a avaliação que um colaborador recebeu de seu líder' })
   @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
-  @ApiResponse({ status: 200, description: 'Avaliações do líder retornadas com sucesso.', type: [LeaderEvaluationRecordDto] }) // Atualizado aqui
+  @ApiResponse({ status: 200, description: 'Avaliações do líder retornadas com sucesso.', type: [LeaderEvaluationRecordDto] }) 
   @ApiResponse({ status: 404, description: 'Avaliação não encontrada.' })
   findLeaderEvaluationForCollaborator(
     @Param('userId', ParseUUIDPipe) userId: string,
