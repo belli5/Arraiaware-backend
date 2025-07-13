@@ -53,4 +53,9 @@ export class CreateUserDto {
   @IsUUID()
   @IsOptional()
   leaderId?: string;
+
+  @ApiPropertyOptional({ description: 'ID do mentor do usuário' })
+  @IsUUID()
+  @IsOptional()
+  mentorId?: string;
 }
