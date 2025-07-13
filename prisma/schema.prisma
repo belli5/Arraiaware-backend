@@ -50,6 +50,8 @@ model User {
   directReportEvaluationsDone       DirectReportEvaluation[] @relation("EvaluationsDoneByCollaborator")
   directReportEvaluationsReceived   DirectReportEvaluation[] @relation("EvaluationsReceivedByLeader")
   auditLogs                         AuditLog[]
+  objectives       Objective[]       @relation("UserObjectives")
+  developmentPlans DevelopmentPlan[] @relation("UserDevelopmentPlans")
 }
 
 model Project {
@@ -108,6 +110,8 @@ model EvaluationCycle {
   equalizationLogs        EqualizationLog[]
   aiSummaries             AISummary[]
   directReportEvaluations DirectReportEvaluation[]
+  objectives       Objective[]
+  developmentPlans DevelopmentPlan[]
 }
 
 model SelfEvaluation {
@@ -254,4 +258,41 @@ model AuditLog {
   details   Json?
   ipAddress String?
   createdAt DateTime @default(now())
+}
+
+model Objective {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  userId      String
+  user        User        @relation("UserObjectives", fields: [userId], references: [id], onDelete: Cascade)
+  cycleId     String
+  cycle       EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  keyResults  KeyResult[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model KeyResult {
+  id          String    @id @default(cuid())
+  title       String
+  progress    Float     @default(0) // Progresso de 0.0 a 1.0
+  status      String    @default("A fazer")
+  objectiveId String
+  objective   Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model DevelopmentPlan {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("A fazer") // e.g., "A fazer", "Em andamento", "Concluído"
+  userId      String
+  user        User     @relation("UserDevelopmentPlans", fields: [userId], references: [id], onDelete: Cascade)
+  cycleId     String
+  cycle       EvaluationCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
