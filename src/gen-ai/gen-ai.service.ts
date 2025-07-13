@@ -111,4 +111,32 @@ export class GenAIService {
       throw new InternalServerErrorException('Falha ao extrair os insights da avaliação.');
     }
   }
+
+    async generatePdiSuggestions(evaluationData: any): Promise<string> {
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const prompt = `
+      Você é um coach de carreira e especialista em RH. Baseado nos dados da autoavaliação a seguir, gere sugestões de Plano de Desenvolvimento Individual (PDI).
+
+      **Dados da Autoavaliação:**
+      ${JSON.stringify(evaluationData, null, 2)}
+
+      **Instruções:**
+      1. Identifique 2-3 áreas principais para desenvolvimento, focando nos critérios com as menores notas e nas justificativas.
+      2. Para cada área, sugira ações concretas (ex: cursos, livros, projetos práticos, busca por mentoria).
+      3. O tom deve ser construtivo e encorajador.
+      4. As sugestões devem ser realistas e focadas no crescimento profissional do colaborador.
+
+      Gere as sugestões de PDI em formato de lista (markdown).
+    `;
+
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      this.logger.error('Erro ao gerar sugestões de PDI com GenAI:', error);
+      throw new InternalServerErrorException('Falha ao gerar sugestões para o PDI.');
+    }
+  }
 }
