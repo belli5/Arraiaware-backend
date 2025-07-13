@@ -5,9 +5,9 @@ import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
 
 @ApiTags('Users')
 @Controller('api/users')
@@ -26,7 +26,7 @@ export class UsersController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserType.ADMIN, UserType.RH)
+  @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR)
   @ApiOperation({ summary: 'Listar todos os usuários' })
   @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso.'})
   findAll() {
