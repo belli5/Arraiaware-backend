@@ -104,14 +104,12 @@ export class EqualizationService {
         return {
           criterionId: criterion.id,
           criterionName: criterion.criterionName,
-
           selfEvaluation: selfEval
             ? {
                 score: selfEval.score,
                 justification: this.encryptionService.decrypt(selfEval.justification),
               }
             : undefined,
-
           peerEvaluation:
             peerAverageScore !== null
               ? {
@@ -124,8 +122,6 @@ export class EqualizationService {
       },
     );
 
-    // Define o status da equalização.
-    // Se existe um registro de avaliação finalizada com o critério 'geral' e uma nota, está equalizada.
     const finalizationRecord = finalizedEvaluations.find(
       (ev) => ev.criterionId === 'geral'
     );
@@ -179,29 +175,32 @@ export class EqualizationService {
     return { summary };
   }
 
-async finalizeEqualization(
+  async finalizeEqualization(
     collaboratorId: string,
     cycleId: string,
     committeeMemberId: string,
     dto: FinalizeEqualizationDto,
   ) {
     const { finalScore, committeeObservation } = dto;
-
+  
     const [collaborator, cycle, committeeMember] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: collaboratorId }, include: { leader: true } }),
+      this.prisma.user.findUnique({
+        where: { id: collaboratorId },
+        include: { leader: true, mentor: true },
+      }),
       this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } }),
       this.prisma.user.findUnique({ where: { id: committeeMemberId } }),
     ]);
-
+  
     if (!collaborator || !cycle) {
       throw new NotFoundException('Colaborador ou Ciclo não encontrado.');
     }
     if (!committeeMember) {
       throw new NotFoundException(`Membro do comitê com ID ${committeeMemberId} não encontrado.`);
     }
-
+  
     const transactionPayload: Prisma.PrismaPromise<any>[] = [];
-
+  
     const criterionId = 'geral'; 
     await this.prisma.evaluationCriterion.upsert({
       where: { id: criterionId },
@@ -212,7 +211,7 @@ async finalizeEqualization(
         criterionName: 'Nota Final do Comitê',
       },
     });
-
+  
     if (committeeObservation) {
       transactionPayload.push(
         this.prisma.equalizationLog.create({
@@ -226,7 +225,7 @@ async finalizeEqualization(
         }),
       );
     }
-
+  
     transactionPayload.push(
       this.prisma.finalizedEvaluation.upsert({
         where: {
@@ -249,19 +248,19 @@ async finalizeEqualization(
         },
       }),
     );
-
+  
     await this.prisma.$transaction(transactionPayload);
-
+  
     this.logger.log(`[BRUTAL FACTS] Iniciando processo para colaborador: ${collaborator.name}`);
-    if (collaborator.leader) {
-      this.logger.log(`[BRUTAL FACTS] Mentor/Líder encontrado: ${collaborator.leader.name}`);
-
+    if (collaborator.mentor) {
+      this.logger.log(`[BRUTAL FACTS] Mentor encontrado: ${collaborator.mentor.name}`);
+  
       const consolidatedData = await this.getConsolidatedView(collaboratorId, cycleId);
       this.logger.log('[BRUTAL FACTS] Dados consolidados para a IA foram recolhidos.');
-
+  
       const brutalFacts = await this.genAIService.extractBrutalFacts(consolidatedData);
       this.logger.log(`[BRUTAL FACTS] Texto gerado pela IA: "${brutalFacts.substring(0, 100)}..."`);
-
+  
       await this.prisma.aISummary.create({
         data: {
           summaryType: 'BRUTAL_FACTS',
@@ -271,19 +270,19 @@ async finalizeEqualization(
           generatedById: committeeMemberId,
         },
       });
-
-      this.logger.log(`[BRUTAL FACTS] A chamar NotificationsService para enviar email para: ${collaborator.leader.email}`);
+  
+      this.logger.log(`[BRUTAL FACTS] A chamar NotificationsService para enviar email para: ${collaborator.mentor.email}`);
       await this.notificationsService.sendBrutalFactsToMentor(
-        collaborator.leader,
+        collaborator.mentor,
         collaborator,
         brutalFacts,
         cycle.name,
       );
       this.logger.log('[BRUTAL FACTS] Chamada ao NotificationsService concluída.');
     } else {
-      this.logger.warn(`[BRUTAL FACTS] Processo abortado. O colaborador ${collaborator.name} não possui um líder/mentor associado.`);
+      this.logger.warn(`[BRUTAL FACTS] Processo abortado. O colaborador ${collaborator.name} não possui um mentor associado.`);
     }
-
+  
     return { message: `Equalização para o colaborador ${collaborator.name} foi finalizada com sucesso.` };
   }
 
