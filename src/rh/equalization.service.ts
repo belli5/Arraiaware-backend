@@ -137,9 +137,29 @@ export class EqualizationService {
       referenceFeedbacks,
       status,
       brutalFacts: brutalFactsRecord ? this.encryptionService.decrypt(brutalFactsRecord.content) : undefined,
+      finalScore: finalizationRecord?.finalScore,
     };
 
     return response;
+  }
+
+    async getBrutalFacts(userId: string, cycleId: string): Promise<{ brutalFacts: string | undefined }> {
+    const brutalFactsRecord = await this.prisma.aISummary.findFirst({
+      where: {
+          collaboratorId: userId,
+          cycleId,
+          summaryType: 'BRUTAL_FACTS',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!brutalFactsRecord) {
+      throw new NotFoundException(`Nenhum "Brutal Fact" encontrado para o usuário com ID ${userId} no ciclo ${cycleId}.`);
+    }
+
+    return {
+      brutalFacts: this.encryptionService.decrypt(brutalFactsRecord.content),
+    };
   }
 
   async getEqualizationSummary(userId: string, cycleId: string, requestor: User): Promise<{ summary: string }> {
@@ -323,6 +343,15 @@ export class EqualizationService {
       </div>
     `).join('');
     
+    const finalScoreHtml = data.finalScore ? `
+      <div class="section">
+        <h2>Nota Final da Equalização</h2>
+        <div class="criterion">
+          <div class="score">Nota Final: <span class="${getScoreClass(data.finalScore)}">${data.finalScore}</span></div>
+        </div>
+      </div>
+    ` : '';
+
     const body = `
       <div class="container">
         <div class="header">
@@ -337,6 +366,7 @@ export class EqualizationService {
           <h2>Avaliações por Critério</h2>
           ${criteriaHtml}
         </div>
+        ${finalScoreHtml}
       </div>
     `;
 
