@@ -25,6 +25,8 @@ import { RolesModule } from './roles/roles.module';
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
+import { OkrModule } from './okr/okr.module';
+import { PdiModule } from './pdi/pdi.module';
 
 @Module({
   imports: [
@@ -67,6 +69,8 @@ import { AdminModule } from './admin/admin.module';
     TeamModule,
     PdfModule,
     EncryptionModule,
+    OkrModule,
+    PdiModule,
   ],
   controllers: [AppController],
   providers: [

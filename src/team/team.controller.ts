@@ -38,4 +38,18 @@ export class TeamController {
   async getTeamByManager(@Param('managerId', ParseUUIDPipe) managerId: string): Promise<ManagedTeamDto[]> {
     return this.teamService.getTeamByManager(managerId);
   }
+
+  @Get('member/:userId/okrs')
+  @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR) 
+  @ApiOperation({ summary: "Obtém os OKRs de um membro da equipe (visão do líder/mentor)" })
+  getMemberOkrs(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.teamService.getMemberOkrs(userId);
+  }
+
+  @Get('member/:userId/pdis')
+  @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR) 
+  @ApiOperation({ summary: "Obtém os PDIs de um membro da equipe (visão do líder/mentor)" })
+  getMemberPdis(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.teamService.getMemberPdis(userId);
+  }
 }
