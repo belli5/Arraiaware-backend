@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   EvaluationCriterion,
   LeaderEvaluation,
@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { EncryptionService } from 'src/common/encryption/encryption.service';
 import { EqualizationService } from 'src/rh/equalization.service';
+import { TeamMemberDto } from 'src/team/dto/team-info.dto';
 import * as XLSX from 'xlsx';
 import { GenAIService } from '../gen-ai/gen-ai.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -26,7 +27,7 @@ export interface CommitteeSummary {
 
 @Injectable()
 export class CommitteeService {
-  constructor(
+ constructor(
     private prisma: PrismaService,
     private genAIService: GenAIService,
     private equalizationService: EqualizationService,
@@ -299,26 +300,38 @@ this.prisma.user.count({
     };
   }
 
-  async setMentor(userId: string, mentorId: string | null, committeeMemberId: string) {
+  async setMentor(userId: string, mentorId: string | null): Promise<User> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
 
     if (!user) {
-      throw new NotFoundException(`Usuário com ID ${userId} não encontrado.`);
+      throw new NotFoundException(`Colaborador com ID ${userId} não encontrado.`);
     }
 
     if (mentorId) {
-      const mentor = await this.prisma.user.findUnique({ where: { id: mentorId } });
+      const mentor = await this.prisma.user.findUnique({
+        where: { id: mentorId },
+      });
+
       if (!mentor) {
         throw new NotFoundException(`Mentor com ID ${mentorId} não encontrado.`);
       }
+
+    
+    if (mentor.userType !== UserType.COMITE && mentor.userType !== UserType.ADMIN) {
+        throw new ForbiddenException(`O usuário ${mentor.name} não tem a permissão 'COMITE' para ser um mentor.`);
+      }
     }
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { mentorId: mentorId },
     });
+    
+    
+    const { passwordHash, ...result } = updatedUser;
+    return { ...result, passwordHash: undefined };
   }
 
   async getSingleAiSummary(evaluationId: string, requestor: User): Promise<{ summary: string }> {
@@ -449,5 +462,50 @@ this.prisma.user.count({
     await this.prisma.$transaction(transactionPayload);
 
     return { message: `Avaliação para o colaborador ID ${collaboratorId} foi atualizada com sucesso.` };
+  }
+  async getMenteesByMentor(mentorId: string): Promise<TeamMemberDto[]> {
+    const mentorWithMentees = await this.prisma.user.findUnique({
+      where: { id: mentorId },
+      include: {
+        mentees: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+          orderBy: {
+            name: 'asc'
+          }
+        },
+      },
+    });
+
+    if (!mentorWithMentees) {
+      throw new NotFoundException(`Mentor com ID ${mentorId} não encontrado.`);
+    }
+
+    return mentorWithMentees.mentees;
+  }
+   async removeMentor(userId: string): Promise<Omit<User, 'passwordHash'>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Colaborador com ID ${userId} não encontrado.`);
+    }
+
+    if (!user.mentorId) {
+      const { passwordHash, ...result } = user;
+      return result;
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { mentorId: null },
+    });
+
+    const { passwordHash, ...result } = updatedUser;
+    return result;
   }
 }
