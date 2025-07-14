@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoleDto } from './dto/create-role.dto';
+import { TrilhaResponseDto } from './dto/trilha-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Injectable()
@@ -38,7 +39,7 @@ export class RolesService {
     return this.prisma.role.delete({ where: { id } });
   }
 
-  async findTrilhasWithCriteria() {
+  async findTrilhasWithCriteria(): Promise<TrilhaResponseDto[]> {
     const roles = await this.prisma.role.findMany({
       where: {
         type: 'TRILHA',
@@ -53,9 +54,31 @@ export class RolesService {
     });
 
     return roles.map((role) => ({
-      id: role.id, 
+      id: role.id,
       nome_da_trilha: role.name,
       criterios: role.criteria.map((rc) => rc.criterion),
     }));
+  }
+
+   async findTrilhaWithCriteria(id: string): Promise<CriterionDto[]> { 
+    const role = await this.prisma.role.findFirst({
+      where: {
+        id,
+        type: 'TRILHA',
+      },
+      include: {
+        criteria: {
+          select: {
+            criterion: true, 
+          },
+        },
+      },
+    });
+
+    if (!role) {
+      throw new NotFoundException(`Trilha com ID ${id} não encontrada.`);
+    }
+
+    return role.criteria.map((rc) => rc.criterion);
   }
 }
