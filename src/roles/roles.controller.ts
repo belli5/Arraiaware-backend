@@ -26,8 +26,16 @@ export class RolesController {
   @Get('trilhas')
   @ApiOperation({ summary: 'Listar todas as trilhas com seus critérios' })
   @ApiResponse({ status: 200, description: 'Lista de trilhas retornada com sucesso.', type: [TrilhaResponseDto] })
-  findAllTrilhas() {
+  findAllTrilhas(): Promise<TrilhaResponseDto[]> {
     return this.rolesService.findTrilhasWithCriteria();
+  }
+
+  @Get('trilhas/:id')
+  @ApiOperation({ summary: 'Listar uma trilha específica com seus critérios' })
+  @ApiResponse({ status: 200, description: 'Trilha retornada com sucesso.', type: TrilhaResponseDto })
+  @ApiResponse({ status: 404, description: 'Trilha não encontrada.' })
+  findTrilhaById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rolesService.findTrilhaWithCriteria(id);
   }
 
   @Get(':id')
