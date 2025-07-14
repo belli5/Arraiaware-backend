@@ -48,7 +48,14 @@ export class CommitteeService {
     const cycleId = await this.getLastCycleId();
 
     const [totalCollaborators, leaderEvaluations, selfEvaluations] = await Promise.all([
-      this.prisma.user.count({ where: { isActive: true, userType: 'COLABORADOR' } }),
+this.prisma.user.count({
+  where: {
+    isActive: true,
+    NOT: {
+      userType: 'ADMIN',
+    },
+  },
+}),
       this.prisma.leaderEvaluation.findMany({ where: { cycleId } }),
       this.prisma.selfEvaluation.findMany({ where: { cycleId, submissionStatus: 'Concluído' } }),
     ]);
