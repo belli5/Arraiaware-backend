@@ -67,4 +67,10 @@ export class EqualizationResponseDto {
     example: 'A percepção sobre sua comunicação é consistentemente um ponto a ser melhorado...'
   })
   brutalFacts?: string;
+
+  @ApiPropertyOptional({
+    description: 'A nota final consolidada pelo comitê.',
+    example: 4.5,
+  })
+  finalScore?: number;
 }
