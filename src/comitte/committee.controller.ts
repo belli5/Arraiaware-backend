@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { User, UserType } from '@prisma/client';
 import { Response } from 'express';
+import { TeamMemberDto } from 'src/team/dto/team-info.dto';
 import { AssignMentorDto } from 'src/users/dto/assign-mentor.dto';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -75,17 +76,34 @@ export class CommitteeController {
     const requestor = request.user as User;
     return this.committeeService.getSingleAiSummary(evaluationId, requestor);
   }
-   @Patch('users/:userId/mentor')
+ @Patch('users/:userId/mentor')
   @Roles(UserType.ADMIN, UserType.COMITE)
-  @ApiOperation({ summary: 'Define ou remove o mentor de um usuário (Ação restrita ao Comitê)' })
+  @ApiOperation({ summary: 'Define o mentor de um usuário' })
   @ApiResponse({ status: 200, description: 'Mentor do usuário atualizado com sucesso.' })
-  @ApiResponse({ status: 403, description: 'Acesso negado.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado ou o usuário selecionado não pode ser mentor.' })
   @ApiResponse({ status: 404, description: 'Usuário ou mentor não encontrado.' })
   setMentor(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: AssignMentorDto,
-    @Req() request,
   ) {
-    const committeeMemberId = request.user.id;
+    return this.committeeService.setMentor(userId, dto.mentorId);
+  }
+
+  @Get('mentor/:mentorId/mentees')
+  @Roles(UserType.ADMIN, UserType.COMITE)
+  @ApiOperation({ summary: "Obtém a lista de mentorados de um mentor" })
+  @ApiResponse({ status: 200, description: 'Lista de mentorados retornada com sucesso.', type: [TeamMemberDto] })
+  @ApiResponse({ status: 404, description: 'Mentor não encontrado.' })
+  async getMenteesByMentor(@Param('mentorId', ParseUUIDPipe) mentorId: string): Promise<TeamMemberDto[]> {
+    return this.committeeService.getMenteesByMentor(mentorId);
+  }
+  @Delete('users/:userId/mentor')
+  @Roles(UserType.ADMIN, UserType.COMITE)
+  @ApiOperation({ summary: 'Remove o mentor de um usuário' })
+  @ApiResponse({ status: 200, description: 'Mentor removido com sucesso.' })
+  @ApiResponse({ status: 403, description: 'Acesso negado.' })
+  @ApiResponse({ status: 404, description: 'Usuário não encontrado.' })
+  removeMentor(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.committeeService.removeMentor(userId);
   }
 }
