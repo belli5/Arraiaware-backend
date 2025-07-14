@@ -30,6 +30,19 @@ export class EqualizationController {
     return this.equalizationService.getConsolidatedView(userId, cycleId);
   }
 
+  @Get('brutal-facts/:userId')
+  @Roles(UserType.ADMIN, UserType.RH,UserType.COLABORADOR)
+  @ApiOperation({ summary: 'Busca os "Brutal Facts" de um colaborador para um ciclo específico' })
+  @ApiQuery({ name: 'cycleId', type: 'string', required: true })
+  @ApiResponse({ status: 200, description: '"Brutal Facts" retornados com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Recurso não encontrado.' })
+  getBrutalFacts(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.equalizationService.getBrutalFacts(userId, cycleId);
+  }
+
   @Get('consolidated-view/:userId/summary') 
   @Roles(UserType.ADMIN, UserType.RH)
   @ApiOperation({ summary: 'Gera um resumo com GenAI e o envia por email para o solicitante' })
