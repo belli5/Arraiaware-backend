@@ -9,6 +9,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
+import { CommitteInsightsInfo } from './dto/committee-insights.dto';
 
 @ApiTags('Committee')
 @Controller('api/committee')
@@ -24,6 +25,15 @@ export class CommitteeController {
   @ApiResponse({ status: 404, description: 'Nenhum ciclo foi encontrado.' })
   async getLastCycleSummary() {
     return this.committeeService.getLastCycleSummary();
+  }
+
+  @Get('insights')
+  @Roles(UserType.ADMIN, UserType.COMITE)
+  @ApiOperation({ summary: 'Obter insights de todos os ciclos de avaliação' })
+  @ApiResponse({ status: 200, description: 'Insights retornados com sucesso.', type: CommitteInsightsInfo })
+  @ApiResponse({ status: 404, description: 'Nenhum ciclo foi encontrado.' })
+  async getCommitteInsights(): Promise<CommitteInsightsInfo> {
+    return this.committeeService.getCommitteInsights();
   }
 
   @Get('export/cycle/:cycleId/excel')

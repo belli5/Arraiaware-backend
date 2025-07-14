@@ -17,6 +17,7 @@ import { GenAIService } from '../gen-ai/gen-ai.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
+import { CommitteInsightsInfo, CycleCommitteInsightsInfoDto } from './dto/committee-insights.dto';
 
 export interface CommitteeSummary {
   readyEvaluations: number;
@@ -80,6 +81,80 @@ this.prisma.user.count({
       overallAverage,
     };
   }
+
+    async getCommitteInsights(): Promise<CommitteInsightsInfo> {
+    const cycles = await this.prisma.evaluationCycle.findMany({
+      orderBy: { startDate: 'desc' },
+    });
+
+    if (cycles.length === 0) {
+      throw new NotFoundException('Nenhum ciclo de avaliação foi encontrado.');
+    }
+
+    const cyclesInsights: CycleCommitteInsightsInfoDto[] = [];
+    let totalScoreSum = 0;
+    let totalLeaderEvaluationsCount = 0;
+    let totalProjectsAmount = 0;
+
+    const activeCollaborators = await this.prisma.user.count({
+      where: { isActive: true, NOT: { userType: 'ADMIN' } },
+    });
+
+    for (const cycle of cycles) {
+      const [leaderEvaluations, selfEvaluations, projectsInCycle] = await Promise.all([
+        this.prisma.leaderEvaluation.findMany({ where: { cycleId: cycle.id } }),
+        this.prisma.selfEvaluation.findMany({ where: { cycleId: cycle.id, submissionStatus: 'Concluído' } }),
+        this.prisma.project.count({ where: { cycleId: cycle.id } }),
+      ]);
+
+      let cycleTotalScore = 0;
+      if (leaderEvaluations.length > 0) {
+        leaderEvaluations.forEach(ev => {
+          cycleTotalScore += ev.deliveryScore + ev.proactivityScore + ev.collaborationScore + ev.skillScore;
+        });
+        totalScoreSum += cycleTotalScore;
+        totalLeaderEvaluationsCount += leaderEvaluations.length;
+      }
+
+      const cycleOverallAverage = leaderEvaluations.length > 0
+        ? parseFloat((cycleTotalScore / (leaderEvaluations.length * 4)).toFixed(2))
+        : 0;
+
+      const readyEvaluations = new Set(selfEvaluations.map(ev => ev.userId)).size;
+      const pendingEvaluations = activeCollaborators - readyEvaluations;
+
+      cyclesInsights.push({
+        cycleId: cycle.id,
+        cycleName: cycle.name,
+        overallAverage: cycleOverallAverage,
+        totalCollaborators: activeCollaborators,
+        readyEvaluations,
+        pendingEvaluations: pendingEvaluations < 0 ? 0 : pendingEvaluations,
+        projectsInCycle,
+      });
+
+      totalProjectsAmount += projectsInCycle;
+    }
+
+    const activeCycle = cycles.find(c => c.status === 'Aberto');
+    const activeProjects = activeCycle
+      ? await this.prisma.project.count({ where: { cycleId: activeCycle.id } })
+      : 0;
+
+    const overallScore = totalLeaderEvaluationsCount > 0
+      ? parseFloat((totalScoreSum / (totalLeaderEvaluationsCount * 4)).toFixed(2))
+      : 0;
+
+    return {
+      cycles: cyclesInsights,
+      cyclesAmount: cycles.length,
+      score: overallScore,
+      projectsAmount: totalProjectsAmount,
+      activeProjects,
+      activeCollaborators,
+    };
+  }
+
 
   async exportCycleDataForExcel(cycleId: string): Promise<{ fileName: string; buffer: Buffer }> {
     const cycle = await this.prisma.evaluationCycle.findUnique({
