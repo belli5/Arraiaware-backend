@@ -27,6 +27,7 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { OkrModule } from './okr/okr.module';
 import { PdiModule } from './pdi/pdi.module';
+import { BrutalFactsModule } from './brutal-facts/brutal-facts.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { PdiModule } from './pdi/pdi.module';
     EncryptionModule,
     OkrModule,
     PdiModule,
+    BrutalFactsModule
   ],
   controllers: [AppController],
   providers: [
