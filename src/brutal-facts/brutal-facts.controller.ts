@@ -26,6 +26,6 @@ export class BrutalFactsController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('cycleId', ParseUUIDPipe) cycleId: string,
   ): Promise<BrutalFactsDto[]> {
-    return this.brutalFactsService.generateBrutalFacts(userId, cycleId);
+    return this.brutalFactsService.generateBrutalFactsForMentees(userId, cycleId);
   }
 }
