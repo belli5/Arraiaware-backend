@@ -100,10 +100,13 @@ export class GenAIService {
       1.  **Pontos Positivos:**
           -   Faça um resumo dos principais elogios e pontos fortes, combinando as notas altas e os feedbacks positivos dos pares ("pontos a explorar") e do líder. Seja direto.
 
-      2.  **Pontos de Melhoria (Negativos):**
+      2.  **Pontos de Negativos:**
           -   Faça um resumo das principais críticas e áreas para desenvolvimento, combinando as notas mais baixas e os feedbacks de "pontos a melhorar" dos pares e as justificativas do líder. Seja direto e construtivo.
-
-      O resumo deve ser conciso e focado em fornecer uma visão clara do desempenho, sem incluir planos de ação ou recomendações extensas.
+      3. **Como o colaborador foi avaliado pelo pares e lider (feedback e nota)**: 
+          -   Faça um resumo de como o colaborador foi avaliado pelo pares e lider, incluindo feedbacks e notas. Seja direto e construtivo.
+      4. **Principais pontos de evolução**:
+          -   Faça um resumo dos principais pontos de evolução do colaborador, incluindo feedbacks e notas. Seja direto e construtivo.
+      O resumo deve ser conciso e focado em fornecer tente chegar a um resumo de 20 linhas que contenha uma visão clara do desempenho, sem incluir planos de ação ou recomendações extensas.
     `;
 
     try {
