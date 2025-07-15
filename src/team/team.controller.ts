@@ -28,6 +28,22 @@ export class TeamController {
     return this.teamService.getUserProjectsInCurrentCycle(userId);
   }
 
+
+  @Get('manager/:userId/projects')
+  @ApiOperation({ summary: 'Obter todos os projetos de um GESTOR no ciclo ativo' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de projetos do gestor retornada com sucesso.',
+    type: [TeamInfoDto],
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Nenhum ciclo ativo ou projeto encontrado para o gestor.',
+  })
+  async getManagerProjects(@Param('userId', ParseUUIDPipe) userId: string): Promise<TeamInfoDto[]> {
+    return this.teamService.getManagerProjectsInCurrentCycle(userId);
+  }
+
   @Get('manager/:managerId')
   @Roles(UserType.ADMIN, UserType.RH, UserType.GESTOR)
   @ApiOperation({ summary: 'Obtém a lista de projetos e seus membros gerenciados por um gestor' })
