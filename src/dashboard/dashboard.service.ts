@@ -219,4 +219,60 @@ export class DashboardService {
       overdueEvaluations,
     };
   }
+  async getUserEvolution(userId: string) {
+    const userCycles = await this.prisma.evaluationCycle.findMany({
+      where: {
+        selfEvaluations: { some: { userId } },
+      },
+      orderBy: { startDate: 'asc' },
+      include: {
+        selfEvaluations: {
+          where: { userId },
+          include: { criterion: true },
+        },
+        finalizedEvaluations: {
+          where: {
+            collaboratorId: userId,
+            criterionId: 'geral',
+          },
+        },
+      },
+    });
+
+    if (userCycles.length === 0) {
+      return [];
+    }
+
+    const evolutionData = userCycles.map(cycle => {
+      const pillarScores: { [key: string]: number[] } = {};
+
+      cycle.selfEvaluations.forEach(evaluation => {
+        const pillar = evaluation.criterion.pillar;
+        if (!pillarScores[pillar]) {
+          pillarScores[pillar] = [];
+        }
+        pillarScores[pillar].push(evaluation.score);
+      });
+
+      const averages: { [key: string]: number } = {};
+      for (const pillar in pillarScores) {
+        const scores = pillarScores[pillar];
+        const average = scores.length > 0
+          ? parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2))
+          : 0;
+        averages[pillar] = average;
+      }
+      
+      const finalEqualizationRecord = cycle.finalizedEvaluations[0];
+      const finalEqualizationScore = finalEqualizationRecord ? finalEqualizationRecord.finalScore : null;
+
+      return {
+        cycleName: cycle.name,
+        averages,
+        finalEqualizationScore,
+      };
+    });
+
+    return evolutionData;
+  }
 }
