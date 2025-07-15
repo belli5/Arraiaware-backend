@@ -127,4 +127,54 @@ export class TeamService {
         orderBy: { createdAt: 'desc' },
     });
   }
+
+async getManagerProjectsInCurrentCycle(userId: string): Promise<TeamInfoDto[]> {
+    const currentCycle = await this.prisma.evaluationCycle.findFirst({
+      orderBy: {
+        name: 'desc',
+      },
+    });
+
+    if (!currentCycle) {
+      throw new NotFoundException('Nenhum ciclo de avaliação encontrado no sistema.');
+    }
+
+    const projects = await this.prisma.project.findMany({
+      where: {
+        cycleId: currentCycle.id,
+        managerId: userId,
+      },
+      include: {
+        collaborators: {
+          select: { id: true, name: true, email: true },
+        },
+        manager: {
+          select: { id: true, name: true },
+        },
+        cycle: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!projects || projects.length === 0) {
+      throw new NotFoundException(
+        `Nenhum projeto encontrado para o gestor com ID ${userId} no ciclo atual ('${currentCycle.name}').`,
+      );
+    }
+
+    // O objeto retornado aqui corresponde ao TeamInfoDto, não ao ManagedTeamDto.
+    return projects.map(project => {
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        cycleId: project.cycle.id,
+        cycleName: project.cycle.name,
+        managerId: project.manager.id,
+        managerName: project.manager.name,
+        collaborators: project.collaborators, // Para o gestor, retornamos todos os colaboradores do time.
+      };
+    });
+  }
+
 }
