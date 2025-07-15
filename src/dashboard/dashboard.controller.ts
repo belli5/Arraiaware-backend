@@ -45,4 +45,11 @@ export class DashboardController {
   getOverallEvaluationStats(): Promise<EvaluationStatsDto> {
     return this.dashboardService.getOverallEvaluationStats();
   }
+  
+  @Get('user-evolution/:userId')
+  @ApiOperation({ summary: 'Obtém o histórico de médias de um usuário para o gráfico de evolução' })
+  @ApiResponse({ status: 200, description: 'Dados de evolução retornados com sucesso.' })
+  getUserEvolution(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.dashboardService.getUserEvolution(userId);
+  }
 }
