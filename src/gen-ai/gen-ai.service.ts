@@ -16,10 +16,6 @@ export class GenAIService {
     }
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
-
-  /**
-   * Gera um resumo conciso para o comitê de equalização.
-   */
   async generateEqualizationSummary(data: EqualizationResponseDto): Promise<string> {
     const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
@@ -74,32 +70,40 @@ export class GenAIService {
     }
   }
 
-  async extractBrutalFacts(data: EqualizationResponseDto): Promise<string> {
+  async extractBrutalFacts(data: any): Promise<string> {
     const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     
-    const prompt = `
-      Você é um coach de carreira e mentor experiente. Sua tarefa é extrair os "Brutal Facts" (a verdade nua e crua, mas construtiva) da avaliação de "${data.collaboratorName}" para ajudar seu mentor a preparar uma sessão de feedback eficaz.
 
-      **Dados Consolidados:**
-      - **Avaliações por Critério:**
-      ${data.consolidatedCriteria.map(c => `
-        - Critério: "${c.criterionName}" | Auto: ${c.selfEvaluation?.score ?? 'N/A'} | Líder: ${c.leaderEvaluation?.score ?? 'N/A'} | Pares (média): ${c.peerEvaluation?.score ?? 'N/A'}
-      `).join('')}
-      - **Feedbacks de Pares:**
-      ${data.peerFeedbacks.length > 0 ? data.peerFeedbacks.map(f => `  - De ${f.evaluatorName}: (Melhorar: "${f.pointsToImprove}"; Explorar: "${f.pointsToExplore}")`).join('\n') : 'N/A'}
+    const leaderJustification = data.leaderEvaluation?.justification ?? 'N/A';
+    const peerFeedbacksText = data.peerFeedbacks?.length > 0
+      ? data.peerFeedbacks.map(f => `- Pontos a Melhorar: "${f.pointsToImprove}"\n  - Pontos a Explorar: "${f.pointsToExplore}"`).join('\n')
+      : 'Nenhum feedback de pares fornecido.';
+
+    const prompt = `
+      Você é um especialista em análise de desempenho de RH. Sua tarefa é criar um resumo breve e objetivo sobre a avaliação de performance de "${data.collaboratorName}".
+
+      **Contexto:**
+      - **Colaborador Avaliado:** ${data.collaboratorName}
+      - **Ciclo de Avaliação:** ${data.cycleName}
+      - **Fontes de Dados:** Avaliação do Líder e Avaliações de Pares (360).
+
+      **Dados de Avaliação:**
+      - **Nota do Líder (média):** ${data.leaderEvaluationScore ?? 'N/A'}
+      - **Nota dos Pares (média):** ${data.peerEvaluationScore ?? 'N/A'}
+      - **Feedbacks Qualitativos (Pares):**
+        ${peerFeedbacksText}
+      - **Justificativa do Líder:** ${leaderJustification}
 
       **Instruções:**
-      1.  **Seja direto e empático.** Identifique no máximo 2 ou 3 temas críticos que emergem da análise cruzada dos dados.
-      2.  Foque em lacunas de performance (onde as notas do líder/pares são baixas) e em lacunas de percepção (onde a autoavaliação é muito diferente da dos outros).
-      3.  Use os "pontos a melhorar" dos pares para dar substância aos "Brutal Facts".
-      4.  Transforme os dados em pontos de ação/reflexão para o mentor abordar, não apenas numa lista de problemas.
-      5. divida nesses pontos:
-        -Pontos Fortes,
-        -Pontos Fracos 
-        -Plano de Ação,
-        -Recomendações Finais
+      Com base nos dados fornecidos, gere um resumo que contenha estritamente os seguintes tópicos:
 
-      Agora, gere os "Brutal Facts" para "${data.collaboratorName}":
+      1.  **Pontos Positivos:**
+          -   Faça um resumo dos principais elogios e pontos fortes, combinando as notas altas e os feedbacks positivos dos pares ("pontos a explorar") e do líder. Seja direto.
+
+      2.  **Pontos de Melhoria (Negativos):**
+          -   Faça um resumo das principais críticas e áreas para desenvolvimento, combinando as notas mais baixas e os feedbacks de "pontos a melhorar" dos pares e as justificativas do líder. Seja direto e construtivo.
+
+      O resumo deve ser conciso e focado em fornecer uma visão clara do desempenho, sem incluir planos de ação ou recomendações extensas.
     `;
 
     try {
