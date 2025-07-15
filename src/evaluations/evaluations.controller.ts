@@ -83,6 +83,16 @@ export class EvaluationsController {
   ) {
     return this.evaluationsService.findReferenceIndicationsForUser(userId, cycleId);
   }
+
+  @Get('reference/received/for/:userId')
+  @ApiOperation({ summary: 'Buscar indicações de referência recebidas por um usuário' })
+  @ApiQuery({ name: 'cycleId', type: 'string', description: 'ID do ciclo de avaliação', required: true })
+  findReferenceReceivedForUser(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('cycleId', ParseUUIDPipe) cycleId: string,
+  ) {
+    return this.evaluationsService.findReferenceReceivedForUser(userId, cycleId);
+  }
   
   @Get('my-status/:userId')
   @ApiOperation({ summary: 'Verificar o status da minha avaliação' })
