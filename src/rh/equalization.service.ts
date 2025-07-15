@@ -5,7 +5,7 @@ import { GenAIService } from 'src/gen-ai/gen-ai.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsolidatedCriterionDto } from './dto/consolidated-criterion.dto';
-import { EqualizationResponseDto, PeerFeedbackSummaryDto, ReferenceFeedbackSummaryDto } from './dto/equalization-response.dto';
+import { EqualizationResponseDto, PeerFeedbackSummaryDto, ReferenceFeedbackSummaryDto, ReferenceReceivedSummaryDto } from './dto/equalization-response.dto';
 import { FinalizeEqualizationDto } from './dto/finalize-equalization.dto';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class EqualizationService {
     private encryptionService: EncryptionService,
   ) {}
 
-  async getConsolidatedView(userId: string, cycleId: string): Promise<EqualizationResponseDto> {
+async getConsolidatedView(userId: string, cycleId: string): Promise<EqualizationResponseDto> {
     const collaborator = await this.prisma.user.findUnique({ where: { id: userId } });
     const cycle = await this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } });
 
@@ -31,7 +31,8 @@ export class EqualizationService {
         selfEvaluations,
         leaderEvaluation,
         peerEvaluations,
-        referenceIndications,
+        referencesSent,       // <-- Busca referências ENVIADAS
+        referencesReceived,   // <-- Busca referências RECEBIDAS
         allCriteria,
         finalizedEvaluations,
         aiSummaryRecord,
@@ -43,30 +44,20 @@ export class EqualizationService {
         where: { evaluatedUserId: userId, cycleId },
         include: { evaluatorUser: { select: { name: true } } },
       }),
+      // Busca referências que o usuário ENVIOU
       this.prisma.referenceIndication.findMany({
         where: { indicatorUserId: userId, cycleId },
         include: { indicatedUser: { select: { name: true } } },
       }),
+      // Busca referências que o usuário RECEBEU
+      this.prisma.referenceIndication.findMany({
+        where: { indicatedUserId: userId, cycleId },
+        include: { indicatorUser: { select: { name: true } } },
+      }),
       this.prisma.evaluationCriterion.findMany(),
-      this.prisma.finalizedEvaluation.findMany({
-        where: { collaboratorId: userId, cycleId },
-      }),
-      this.prisma.aISummary.findFirst({
-        where: {
-          collaboratorId: userId,
-          cycleId,
-          summaryType: 'EQUALIZATION_SUMMARY',
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.aISummary.findFirst({
-        where: {
-            collaboratorId: userId,
-            cycleId,
-            summaryType: 'BRUTAL_FACTS',
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
+      this.prisma.finalizedEvaluation.findMany({ where: { collaboratorId: userId, cycleId } }),
+      this.prisma.aISummary.findFirst({ where: { collaboratorId: userId, cycleId, summaryType: 'EQUALIZATION_SUMMARY' }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.aISummary.findFirst({ where: { collaboratorId: userId, cycleId, summaryType: 'BRUTAL_FACTS' }, orderBy: { createdAt: 'desc' } }),
     ]);
 
     const peerFeedbacks: PeerFeedbackSummaryDto[] = peerEvaluations.map(p => ({
@@ -75,8 +66,15 @@ export class EqualizationService {
       pointsToExplore: this.encryptionService.decrypt(p.pointsToExplore),
     }));
 
-    const referenceFeedbacks: ReferenceFeedbackSummaryDto[] = referenceIndications.map(r => ({
+    // Mapeia referências ENVIADAS
+    const referencesSentSummary: ReferenceFeedbackSummaryDto[] = referencesSent.map(r => ({
       indicatedName: r.indicatedUser?.name ?? 'Anônimo',
+      justification: this.encryptionService.decrypt(r.justification),
+    }));
+
+    // Mapeia referências RECEBIDAS
+    const referencesReceivedSummary: ReferenceReceivedSummaryDto[] = referencesReceived.map(r => ({
+      indicatorName: r.indicatorUser?.name ?? 'Anônimo',
       justification: this.encryptionService.decrypt(r.justification),
     }));
 
@@ -86,11 +84,7 @@ export class EqualizationService {
     let leaderAverageScore: number | null = null;
     let leaderJustification: string | null = null;
     if (leaderEvaluation) {
-      const sum =
-        leaderEvaluation.deliveryScore +
-        leaderEvaluation.proactivityScore +
-        leaderEvaluation.collaborationScore +
-        leaderEvaluation.skillScore;
+      const sum = leaderEvaluation.deliveryScore + leaderEvaluation.proactivityScore + leaderEvaluation.collaborationScore + leaderEvaluation.skillScore;
       leaderAverageScore = sum / 4;
       leaderJustification = this.encryptionService.decrypt(leaderEvaluation.justification);
     }
@@ -104,27 +98,20 @@ export class EqualizationService {
         return {
           criterionId: criterion.id,
           criterionName: criterion.criterionName,
-          selfEvaluation: selfEval
-            ? {
-                score: selfEval.score,
-                justification: this.encryptionService.decrypt(selfEval.justification),
-              }
-            : undefined,
-          peerEvaluation:
-            peerAverageScore !== null
-              ? {
-                  score: parseFloat(peerAverageScore.toFixed(2)),
-                  justification: `Média de ${peerEvaluations.length} avaliações de pares.`,
-                }
-              : undefined,
+          selfEvaluation: selfEval ? {
+            score: selfEval.score,
+            justification: this.encryptionService.decrypt(selfEval.justification),
+          } : undefined,
+          peerEvaluation: peerAverageScore !== null ? {
+            score: parseFloat(peerAverageScore.toFixed(2)),
+            justification: `Média de ${peerEvaluations.length} avaliações de pares.`,
+          } : undefined,
           hasDiscrepancy,
         };
       },
     );
 
-    const finalizationRecord = finalizedEvaluations.find(
-      (ev) => ev.criterionId === 'geral'
-    );
+    const finalizationRecord = finalizedEvaluations.find((ev) => ev.criterionId === 'geral');
     const status = (finalizationRecord && finalizationRecord.finalScore > 0) ? 'Equalizada' : 'Pendente';
 
     const response: EqualizationResponseDto = {
@@ -134,7 +121,8 @@ export class EqualizationService {
       cycleName: cycle.name,
       consolidatedCriteria,
       peerFeedbacks,
-      referenceFeedbacks,
+      referenceFeedbacks: referencesSentSummary,
+      referencesReceived: referencesReceivedSummary,
       status,
       brutalFacts: brutalFactsRecord ? this.encryptionService.decrypt(brutalFactsRecord.content) : undefined,
       finalScore: finalizationRecord?.finalScore,
@@ -306,7 +294,7 @@ export class EqualizationService {
     return { message: `Equalização para o colaborador ${collaborator.name} foi finalizada com sucesso.` };
   }
 
-  public generateEqualizationReportHtml(data: EqualizationResponseDto): string {
+public generateEqualizationReportHtml(data: EqualizationResponseDto): string {
 
     const styles = `
       <style>
@@ -317,8 +305,8 @@ export class EqualizationService {
         h1 { font-size: 24px; }
         h2 { font-size: 20px; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 30px; }
         .section { margin-bottom: 20px; }
-        .criterion { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9; }
-        .criterion-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+        .criterion, .feedback-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background-color: #f9f9f9; }
+        .criterion-title, .feedback-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
         .score { font-size: 14px; margin-bottom: 5px; }
         .score span { font-weight: bold; padding: 2px 6px; border-radius: 4px; color: #fff; }
         .score-high { background-color: #27ae60; }
@@ -334,11 +322,12 @@ export class EqualizationService {
       return 'score-low';
     };
 
-    const criteriaHtml = data.consolidatedCriteria.map(c => `
+    const criteriaHtml = data.consolidatedCriteria
+      .filter(c => c.criterionName !== 'Nota Final do Comitê')
+      .map(c => `
       <div class="criterion">
         <div class="criterion-title">${c.criterionName} ${c.hasDiscrepancy ? '<span style="color: #e74c3c;">(Discrepância!)</span>' : ''}</div>
         ${c.selfEvaluation ? `<div class="score">Autoavaliação: <span class="${getScoreClass(c.selfEvaluation.score)}">${c.selfEvaluation.score}</span></div>` : ''}
-        ${c.peerEvaluation ? `<div class="score">Média Pares: <span class="${getScoreClass(c.peerEvaluation.score)}">${c.peerEvaluation.score}</span></div>` : ''}
         ${c.selfEvaluation?.justification ? `<div class="justification"><b>Justificativa:</b> ${c.selfEvaluation.justification}</div>` : ''}
       </div>
     `).join('');
@@ -351,6 +340,46 @@ export class EqualizationService {
         </div>
       </div>
     ` : '';
+
+  const peerEvalData = data.consolidatedCriteria.length > 0 ? data.consolidatedCriteria[0].peerEvaluation : undefined;
+
+  let peerAverageHtml = '';
+  if (peerEvalData) {
+    peerAverageHtml = `
+      <div class="section">
+        <h2>Média Geral dos Pares</h2>
+        <div class="criterion">
+          <div class="score">Nota Média: <span class="${getScoreClass(peerEvalData.score)}">${peerEvalData.score}</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  // HTML para referências RECEBIDAS
+  const referencesReceivedHtml = data.referencesReceived && data.referencesReceived.length > 0 ? `
+   <div class="section">
+     <h2>Referências Recebidas</h2>
+     ${data.referencesReceived.map(ref => `
+        <div class="feedback-item">
+          <div class="feedback-title">Recebido de: ${ref.indicatorName}</div>
+          <div class="justification">${ref.justification}</div>
+        </div>
+     `).join('')}
+   </div>
+  ` : '';
+
+  // HTML para referências ENVIADAS
+  const referencesSentHtml = data.referenceFeedbacks && data.referenceFeedbacks.length > 0 ? `
+   <div class="section">
+     <h2>Referências Enviadas</h2>
+     ${data.referenceFeedbacks.map(ref => `
+        <div class="feedback-item">
+          <div class="feedback-title">Enviado para: ${ref.indicatedName}</div>
+          <div class="justification">${ref.justification}</div>
+        </div>
+     `).join('')}
+   </div>
+  ` : '';
 
     const body = `
       <div class="container">
@@ -366,10 +395,13 @@ export class EqualizationService {
           <h2>Avaliações por Critério</h2>
           ${criteriaHtml}
         </div>
+        ${peerAverageHtml}
+        ${referencesReceivedHtml}
+        ${referencesSentHtml}
         ${finalScoreHtml}
       </div>
     `;
 
     return `<!DOCTYPE html><html><head><title>Relatório de Avaliação</title>${styles}</head><body>${body}</body></html>`;
-  }
+}
 }

@@ -221,6 +221,20 @@ export class EvaluationsService {
     }));
   }
   
+  async findReferenceReceivedForUser(indicatedUserId: string, cycleId: string) {
+    const indications = await this.prisma.referenceIndication.findMany({
+      where: { indicatedUserId, cycleId },
+      include: {
+        indicatedUser: { select: { id: true, name: true } },
+      },
+    });
+
+    return indications.map((ind) => ({
+      ...ind,
+      justification: this.encryptionService.decrypt(ind.justification),
+    }));
+  }
+
   async findLeaderEvaluationsForDirectReports(leaderId: string, cycleId: string) {
     const evaluations = await this.prisma.leaderEvaluation.findMany({
       where: {

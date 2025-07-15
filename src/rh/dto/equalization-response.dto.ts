@@ -25,6 +25,13 @@ export class ReferenceFeedbackSummaryDto {
   justification: string;
 }
 
+export class ReferenceReceivedSummaryDto {
+  @ApiProperty()
+  indicatorName: string; // Nome de quem indicou
+
+  @ApiProperty()
+  justification: string;
+}
 
 export class EqualizationResponseDto {
   @ApiProperty()
@@ -61,6 +68,9 @@ export class EqualizationResponseDto {
 
   @ApiProperty({ type: [ReferenceFeedbackSummaryDto], description: "Sumário das indicações de referência recebidas." })
   referenceFeedbacks: ReferenceFeedbackSummaryDto[];
+
+  @ApiProperty({ type: [ReferenceReceivedSummaryDto], description: "Sumário das indicações de referência RECEBIDAS pelo colaborador." })
+  referencesReceived: ReferenceReceivedSummaryDto[];
 
   @ApiPropertyOptional({
     description: 'Os "Brutal Facts" gerados pela IA para a sessão de feedback.',
