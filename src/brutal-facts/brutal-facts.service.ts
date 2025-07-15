@@ -5,6 +5,9 @@ import { BrutalFactsDto } from './dto/brutal-facts.dto';
 
 @Injectable()
 export class BrutalFactsService {
+  generateBrutalFacts(userId: string, cycleId: string): BrutalFactsDto[] | PromiseLike<BrutalFactsDto[]> {
+      throw new Error('Method not implemented.');
+  }
   constructor(
     private prisma: PrismaService,
     private genAIService: GenAIService,
@@ -17,7 +20,7 @@ export class BrutalFactsService {
     const [mentor, cycle] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: mentorId },
-        include: { mentees: true }, // Inclui a lista de mentorados
+        include: { mentees: true },
       }),
       this.prisma.evaluationCycle.findUnique({ where: { id: cycleId } }),
     ]);
@@ -29,10 +32,10 @@ export class BrutalFactsService {
       throw new NotFoundException(`Ciclo de Avaliação com ID ${cycleId} não encontrado.`);
     }
     if (!mentor.mentees || mentor.mentees.length === 0) {
-      return []; // Retorna um vetor vazio se o mentor não tiver mentorados
+      return []; 
     }
 
-    // Processa todos os mentorados em paralelo
+  
     const allBrutalFacts = await Promise.all(
       mentor.mentees.map(async (mentee) => {
         const [selfEvaluations, peerEvaluations, leaderEvaluation] =
