@@ -9,6 +9,7 @@ import { CriterionInUseException } from './exceptions/criterion-in-use.exception
 import { CriterionNameConflictException } from './exceptions/criterion-name-conflict.exception';
 import { CriterionNotFoundException } from './exceptions/criterion-not-found.exception';
 import { RoleForAssociationNotFoundException } from './exceptions/role-for-association-not-found.exception';
+import { AssociateCriteriaToRoleDto } from './dto/associate-criteria-to-role.dto';
 
 @Injectable()
 export class CriteriaService {
@@ -291,6 +292,55 @@ async associateToRole(criterionId: string, associateCriterionDto: AssociateCrite
     data: associationsToCreate,
   });
 }
+
+  async associateCriteriaToRole(roleId: string, associateCriteriaDto: AssociateCriteriaToRoleDto) {
+    const { criterionIds } = associateCriteriaDto;
+
+    if (!criterionIds || criterionIds.length === 0) {
+      throw new BadRequestException('A lista de IDs de critério (criterionIds) não pode ser vazia.');
+    }
+
+    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) {
+      throw new RoleForAssociationNotFoundException(roleId);
+    }
+
+    const foundCriteria = await this.prisma.evaluationCriterion.findMany({
+      where: { id: { in: criterionIds } },
+    });
+
+    if (foundCriteria.length !== criterionIds.length) {
+      const foundCriterionIds = new Set(foundCriteria.map((criterion) => criterion.id));
+      const notFoundIds = criterionIds.filter((id) => !foundCriterionIds.has(id));
+      throw new CriterionNotFoundException(notFoundIds.join(', '));
+    }
+
+    const existingAssociations = await this.prisma.roleCriteria.findMany({
+        where: {
+            roleId: roleId,
+            criterionId: { in: criterionIds }
+        },
+        select: {
+            criterionId: true
+        }
+    });
+    const existingCriterionIds = new Set(existingAssociations.map(a => a.criterionId));
+
+    const criterionIdsToCreate = criterionIds.filter(id => !existingCriterionIds.has(id));
+
+    if (criterionIdsToCreate.length === 0) {
+        return { message: "Todas as associações solicitadas já existem.", count: 0 };
+    }
+
+    const associationsToCreate = criterionIdsToCreate.map((criterionId) => ({
+      roleId,
+      criterionId,
+    }));
+
+    return this.prisma.roleCriteria.createMany({
+      data: associationsToCreate,
+    });
+  }
 
   async disassociateFromRole(criterionId: string, disassociateDto: DisassociateCriterionDto) {
     const { roleId } = disassociateDto;
