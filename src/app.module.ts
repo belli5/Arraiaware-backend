@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
+import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -16,7 +17,9 @@ import { EvaluationsModule } from './evaluations/evaluations.module';
 import { GenAIModule } from './gen-ai/gen-ai.module';
 import { ImportHistoryModule } from './import-history/import-history.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { OkrModule } from './okr/okr.module';
 import { PdfModule } from './pdf/pdf.module';
+import { PdiModule } from './pdi/pdi.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { EqualizationModule } from './rh/equalization.module';
@@ -24,9 +27,7 @@ import { RhModule } from './rh/rh.module';
 import { RolesModule } from './roles/roles.module';
 import { TeamModule } from './team/team.module';
 import { UsersModule } from './users/users.module';
-import { AdminModule } from './admin/admin.module';
-import { OkrModule } from './okr/okr.module';
-import { PdiModule } from './pdi/pdi.module';
+
 import { BrutalFactsModule } from './brutal-facts/brutal-facts.module';
 
 @Module({
@@ -72,7 +73,9 @@ import { BrutalFactsModule } from './brutal-facts/brutal-facts.module';
     EncryptionModule,
     OkrModule,
     PdiModule,
-    BrutalFactsModule
+    BrutalFactsModule,
+    
+    
   ],
   controllers: [AppController],
   providers: [
