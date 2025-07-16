@@ -23,6 +23,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
+import { Audit } from 'src/AuditModule/dto/audit.decorator';
 import { CriteriaService } from './criteria.service';
 import { AssociateCriterionDto } from './dto/associate-criterion.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
@@ -36,6 +37,7 @@ export class CriteriaController {
 
   @Patch('batch-update')
   @HttpCode(HttpStatus.OK)
+  @Audit('BATCH_UPDATE_CRITERIA')
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Atualiza nomes e corrige pilares de critérios em massa a partir de um XLSX' })
