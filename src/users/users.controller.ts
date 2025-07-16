@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Request, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
+import { Audit } from 'src/AuditModule/dto/audit.decorator';
 import { Roles } from 'src/auth/roles.decorator';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -16,6 +17,7 @@ export class UsersController {
 
   @Post()
   @UseGuards(RolesGuard)
+  @Audit('CREATE_USER')
   @Roles(UserType.ADMIN, UserType.RH)
   @ApiOperation({ summary: 'Criar um novo usuário' })
   @ApiResponse({ status: 201, description: 'O usuário foi criado com sucesso.'})
@@ -69,6 +71,7 @@ export class UsersController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
+  @Audit('DELETE_USER')
   @Roles(UserType.ADMIN, UserType.RH)
   @ApiOperation({ summary: 'Deletar um usuário pelo ID' })
   @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso.'})
@@ -79,6 +82,7 @@ export class UsersController {
 
   @Patch('me/change-password')
   @ApiBearerAuth()
+  @Audit('RESET_USER_PASSWORD')
   @ApiOperation({ summary: 'Alterar a senha do usuário logado' })
   @ApiResponse({ status: 200, description: 'Senha alterada com sucesso.'})
   @ApiResponse({ status: 401, description: 'A senha atual está incorreta.'})
@@ -95,8 +99,8 @@ export class UsersController {
 
   @Patch(':id/reset-password')
   @UseGuards(RolesGuard)
-  @Roles(UserType.ADMIN, UserType.RH)
-  @ApiOperation({ summary: 'Resetar a senha de um usuário (Admin/RH)' })
+  @Audit('RESET_USER_PASSWORD')
+  @ApiOperation({ summary: 'Resetar a senha de um usuário' })
   @ApiResponse({ status: 200, description: 'Senha resetada e enviada por e-mail com sucesso.'})
   @ApiResponse({ status: 404, description: 'Usuário não encontrado.'})
   resetPassword(@Param('id', ParseUUIDPipe) id: string) {
