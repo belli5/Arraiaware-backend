@@ -29,6 +29,7 @@ import { AssociateCriterionDto } from './dto/associate-criterion.dto';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
 import { DisassociateCriterionDto } from './dto/disassociate-criterion.dto';
 import { UpdateCriterionDto } from './dto/update-criterion.dto';
+import { AssociateCriteriaToRoleDto } from './dto/associate-criteria-to-role.dto';
 
 @ApiTags('Criteria')
 @Controller('api/criteria')
@@ -127,6 +128,18 @@ export class CriteriaController {
     @Body() associateCriterionDto: AssociateCriterionDto,
   ) {
     return this.criteriaService.associateToRole(criterionId, associateCriterionDto);
+  }
+
+  @Post('roles/:roleId/associate-criteria')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Associar múltiplos critérios a um cargo/trilha' })
+  @ApiResponse({ status: 201, description: 'Associações criadas com sucesso.' })
+  @ApiResponse({ status: 404, description: 'Cargo ou um ou mais Critérios não encontrados.' })
+  async associateCriteriaToRole(
+    @Param('roleId', ParseUUIDPipe) roleId: string,
+    @Body() associateCriteriaDto: AssociateCriteriaToRoleDto,
+  ) {
+    return this.criteriaService.associateCriteriaToRole(roleId, associateCriteriaDto);
   }
 
   @Delete(':id/disassociate-role')
