@@ -256,20 +256,41 @@ export class CriteriaService {
     return this.prisma.evaluationCriterion.delete({ where: { id } });
   }
 
-  async associateToRole(criterionId: string, associateCriterionDto: AssociateCriterionDto) {
-    const { roleId } = associateCriterionDto;
-    await this.findOne(criterionId);
-    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
-    if (!role) {
-      throw new RoleForAssociationNotFoundException(roleId);
-    }
-    return this.prisma.roleCriteria.create({
-      data: {
-        criterionId,
-        roleId,
-      },
-    });
+async associateToRole(criterionId: string, associateCriterionDto: AssociateCriterionDto) {
+  const { roleIds } = associateCriterionDto;
+
+
+  if (!roleIds || roleIds.length === 0) {
+    throw new BadRequestException('A lista de IDs de cargo (roleIds) não pode ser vazia.');
   }
+
+
+  await this.findOne(criterionId);
+
+  
+  const foundRoles = await this.prisma.role.findMany({
+    where: {
+      id: { in: roleIds },
+    },
+  });
+
+  if (foundRoles.length !== roleIds.length) {
+    const foundRoleIds = new Set(foundRoles.map((role) => role.id));
+    const notFoundIds = roleIds.filter((id) => !foundRoleIds.has(id));
+
+    throw new RoleForAssociationNotFoundException(notFoundIds.join(', '));
+  }
+
+
+  const associationsToCreate = roleIds.map((roleId) => ({
+    criterionId,
+    roleId,
+  }));
+
+  return this.prisma.roleCriteria.createMany({
+    data: associationsToCreate,
+  });
+}
 
   async disassociateFromRole(criterionId: string, disassociateDto: DisassociateCriterionDto) {
     const { roleId } = disassociateDto;
