@@ -1,6 +1,7 @@
 import { Body, Controller, Param, ParseUUIDPipe, Patch, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
+import { Audit } from 'src/AuditModule/dto/audit.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdminService } from './admin.service';
@@ -15,6 +16,7 @@ export class AdminController {
 
   @Patch('users/:userId/permissions')
   @Roles(UserType.ADMIN)
+  @Audit('UPDATE_USER_PERMISSIONS')
   @ApiOperation({
     summary: 'Define as permissões de um usuário (Admin)',
     description:
