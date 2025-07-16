@@ -2,8 +2,8 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { AUDIT_KEY } from './audit.decorator';
 import { AuditService } from './audit.service';
+import { AUDIT_KEY } from './dto/audit.decorator';
 
 @Injectable()
 export class AuditInterceptor implements NestInterceptor {
