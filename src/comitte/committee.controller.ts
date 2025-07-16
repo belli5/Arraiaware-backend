@@ -2,14 +2,15 @@ import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Query, Req,
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { User, UserType } from '@prisma/client';
 import { Response } from 'express';
+import { Audit } from 'src/AuditModule/dto/audit.decorator';
 import { TeamMemberDto } from 'src/team/dto/team-info.dto';
 import { AssignMentorDto } from 'src/users/dto/assign-mentor.dto';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CommitteeService } from './committee.service';
+import { CommitteInsightsInfo } from './dto/committee-insights.dto';
 import { GetCommitteePanelQueryDto } from './dto/get-committee-panel-query.dto';
 import { UpdateCommitteeEvaluationDto } from './dto/update-committee-evaluation.dto';
-import { CommitteInsightsInfo } from './dto/committee-insights.dto';
 
 @ApiTags('Committee')
 @Controller('api/committee')
@@ -68,6 +69,7 @@ export class CommitteeController {
 
   @Patch('panel/:evaluationId')
   @Roles(UserType.ADMIN, UserType.RH)
+  @Audit('FINALIZE_EQUALIZATION')
   @ApiOperation({ summary: 'Atualiza a nota final e observação de uma avaliação pelo comitê' })
   @ApiResponse({ status: 200, description: 'Avaliação atualizada com sucesso.' })
   updateCommitteeEvaluation(
@@ -88,6 +90,7 @@ export class CommitteeController {
   }
  @Patch('users/:userId/mentor')
   @Roles(UserType.ADMIN, UserType.COMITE)
+  @Audit('ASSIGN_MENTOR')
   @ApiOperation({ summary: 'Define o mentor de um usuário' })
   @ApiResponse({ status: 200, description: 'Mentor do usuário atualizado com sucesso.' })
   @ApiResponse({ status: 403, description: 'Acesso negado ou o usuário selecionado não pode ser mentor.' })
