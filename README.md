@@ -7,11 +7,13 @@
 
 Backend da plataforma RPE, uma solução digital completa para centralizar e automatizar a avaliação de desempenho e o engajamento dos colaboradores da Rocket Corp.
 
+🔗 Frontend em produção: [arraiaware-frontend-iota.vercel.app](http://arraiaware-frontend-iota.vercel.app)
+
 ---
 
 ## 👋 Novo por aqui?
 
-Confira o guia de **ONBOARDING** para começar!
+Confira o guia de **[ONBOARDING](docs/ONBOARDING.md)** para começar.
 
 ---
 
@@ -185,6 +187,17 @@ Simulador de E-mails (**MailHog**): veja `docker-compose.yml` para acesso ao pai
 
 ---
 
+## 🔗 Repositório do Frontend
+
+Este backend está associado a um frontend em um repositório separado. Para uma experiência completa, clone e rode também o frontend:
+
+👉 [https://github.com/belli5/Arraiaware-backend](https://github.com/belli5/Arraiaware-frontend)
+
+---
+
 ## 🧑‍💻 Autoria
 
 Desenvolvido por **Arraiware Team** 🚀
+
+📌 Status Atual: MVPs 1, 2 e 3 entregues com sucesso.
+💡 Próximas etapas: visão analítica avançada, OKRs/PDIs e integrações com NPS.
